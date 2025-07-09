@@ -1,10 +1,14 @@
 package org.example.illuminatiadminbot.inbound;
 
+import lombok.extern.slf4j.Slf4j;
 import org.example.illuminatiadminbot.inbound.menu.MenuBuilder;
 import org.example.illuminatiadminbot.inbound.menu.MenuState;
 import org.example.illuminatiadminbot.inbound.menu.MessageBuilder;
+import org.example.illuminatiadminbot.outbound.model.GroupUser;
+import org.example.illuminatiadminbot.service.AdminBotService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 import org.telegram.telegrambots.longpolling.interfaces.LongPollingUpdateConsumer;
 import org.telegram.telegrambots.longpolling.starter.SpringLongPollingBot;
 import org.telegram.telegrambots.longpolling.util.LongPollingSingleThreadUpdateConsumer;
@@ -20,7 +24,9 @@ import org.telegram.telegrambots.meta.generics.TelegramClient;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
+@Slf4j
 @Component
 public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingleThreadUpdateConsumer {
 
@@ -29,16 +35,20 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
     private final MessageBuilder messageBuilder;
     private final ArrayList<String> subscriptionDetails = new ArrayList<>(List.of("", ""));
     private final ArrayList<String> uploadDetails = new ArrayList<>(List.of("", ""));
+    private String adminStatus = "";
     private MenuState menuState = MenuState.MAIN_MENU;
     private Integer lastMessageId = null;
+
+    private final AdminBotService adminBotService;
 
     @Value("${telegram.bot.token}")
     private String token;
 
-    public AdminTelegramBot(TelegramClient telegramClient, MenuBuilder menuBuilder, MessageBuilder messageBuilder) {
+    public AdminTelegramBot(TelegramClient telegramClient, MenuBuilder menuBuilder, MessageBuilder messageBuilder, AdminBotService adminBotService) {
         this.telegramClient = telegramClient;
         this.menuBuilder = menuBuilder;
         this.messageBuilder = messageBuilder;
+        this.adminBotService = adminBotService;
     }
 
     @Override
@@ -50,11 +60,29 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                 ? update.getMessage().getFrom()
                 : update.getCallbackQuery().getFrom();
 
-        // Сразу пропустим всех, кроме нужного
-        if (!"reanimatthe".equalsIgnoreCase(from.getUserName())) {
+        //
+        Set<String> allowed = Set.of("reanimatthew", "hehekge");
+        String adminNickname = from.getUserName();
+        if (adminNickname == null || !allowed.contains(adminNickname.toLowerCase())) {
             System.out.println("Попытка незарегистрированного входа. Пользователь: " + from.getUserName() + ", ID: " + from.getId());
             // просто выходим — дальше ваш код не выполнится
             return;
+        }
+
+        // TODO перенести в UpdateSqlTelegramBot
+        // метод скачивает администраторов из группы и обновляет Postgres
+        if (update.hasMessage() && update.getMessage().hasText()) {
+            if (update.getMessage().getText().equals("/initializeThisBeautifulBot")) {
+                String message = adminBotService.loadUsers();
+                SendMessage sendMessage = SendMessage.builder()
+                        .text(message)
+                        .build();
+                try {
+                    telegramClient.execute(sendMessage);
+                } catch (TelegramApiException e) {
+                    throw new RuntimeException(e);
+                }
+            }
         }
 
         if (update.hasMessage() && update.getMessage().hasText()) {
@@ -64,6 +92,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                 subscriptionDetails.set(1, "");
                 uploadDetails.set(0, "");
                 uploadDetails.set(1, "");
+                adminStatus = "";
                 menuState = MenuState.MAIN_MENU;
                 InlineKeyboardMarkup markup = menuBuilder.getMain(update);
                 SendMessage menuMessage = messageBuilder.createMessage(update, markup, "Выберите действие:");
@@ -71,6 +100,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                 return;
             }
         }
+
 
         if (update.hasCallbackQuery()) {
             data = update.getCallbackQuery().getData();
@@ -91,6 +121,12 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                     menuState = MenuState.UPLOAD_MENU;
                     InlineKeyboardMarkup markup = menuBuilder.getUpload(update);
                     EditMessageText editMessage = messageBuilder.editMessage(update, lastMessageId, markup, "Выберите тип контента:");
+                    safeExecute(editMessage);
+                } else if ("ADMIN".equals(data)) {
+                    adminStatus = "";
+                    menuState = MenuState.ADMIN_MENU;
+                    InlineKeyboardMarkup markup = menuBuilder.getAdmin(update);
+                    EditMessageText editMessage = messageBuilder.editMessage(update, lastMessageId, markup, "Добавить или удалить администратора");
                     safeExecute(editMessage);
                 }
             }
@@ -132,7 +168,12 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
 
             case NICKNAME_MENU -> {
                 if (!text.isEmpty()) {
-                    subscribeUser(text, subscriptionDetails, update);
+                    text = text.trim();
+                    if (text.startsWith("@")) {
+                        text = text.substring(1);
+                    }
+                    String subscription = adminBotService.subscribeUser(text, subscriptionDetails);
+                    clearMenu(update, lastMessageId, subscription);
                 } else if ("BACK-TO-DURATION".equals(data)) {
                     subscriptionDetails.set(1, "");
                     menuState = MenuState.DURATION_MENU;
@@ -164,6 +205,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                 if ("TEXT".equals(uploadDetails.get(0)) && update.hasMessage() && update.getMessage().hasDocument()) {
                     String fileId = update.getMessage().getDocument().getFileId();
                     uploadDetails.set(1, fileId);
+                    adminBotService.uploadFile(uploadDetails);
                     menuState = MenuState.DESCRIPTION_MENU;
                     clearMenu(update, lastMessageId, "Документ загружен");
                     InlineKeyboardMarkup markup = menuBuilder.getDescription(update);
@@ -215,6 +257,52 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                     safeExecute(editMessage);
                 }
             }
+
+            case ADMIN_MENU -> {
+                if (List.of("ADD", "REMOVE").contains(data)) {
+                    adminStatus = data;
+                    menuState = MenuState.APPOINTMENT_MENU;
+                    InlineKeyboardMarkup markup = menuBuilder.getAppointment(update);
+                    EditMessageText editMessage = messageBuilder.editMessage(update, lastMessageId, markup, adminBotService.adminShow(adminStatus));
+                    safeExecute(editMessage);
+                } else if ("BACK-TO-MAIN".equals(data)) {
+                    adminStatus = "";
+                    menuState = MenuState.MAIN_MENU;
+                    InlineKeyboardMarkup markup = menuBuilder.getMain(update);
+                    EditMessageText editMessage = messageBuilder.editMessage(update, lastMessageId, markup, "Выберите действие:");
+                    safeExecute(editMessage);
+                }
+            }
+
+            case APPOINTMENT_MENU -> {
+                if (!text.trim().isEmpty()) {
+                    try {
+                        Long adminId = Long.parseLong(text);
+                        String result = adminBotService.adminAddOrRemove(adminId, adminStatus);
+                        if (!"Администратор не найден".equals(result)) {
+                            clearMenu(update, lastMessageId, result);
+                        } else {
+                            clearMenu(update, lastMessageId, result);
+                            menuState = MenuState.APPOINTMENT_MENU;
+                            InlineKeyboardMarkup markup = menuBuilder.getAppointment(update);
+                            SendMessage sendMessage = messageBuilder.createMessage(update, markup, adminBotService.adminShow(adminStatus));
+                            lastMessageId = safeExecute(sendMessage).getMessageId();
+                        }
+                    } catch (NumberFormatException e) {
+                        clearMenu(update, lastMessageId, "Некорректный ID");
+                        menuState = MenuState.APPOINTMENT_MENU;
+                        InlineKeyboardMarkup markup = menuBuilder.getAppointment(update);
+                        SendMessage sendMessage = messageBuilder.createMessage(update, markup, adminBotService.adminShow(adminStatus));
+                        lastMessageId = safeExecute(sendMessage).getMessageId();
+                    }
+                } else if ("BACK-TO-ADMIN".equals(data)) {
+                    adminStatus = "";
+                    menuState = MenuState.ADMIN_MENU;
+                    InlineKeyboardMarkup markup = menuBuilder.getAdmin(update);
+                    EditMessageText editMessage = messageBuilder.editMessage(update, lastMessageId, markup, "Добавить или удалить администратора");
+                    safeExecute(editMessage);
+                }
+            }
         }
     }
 
@@ -252,10 +340,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
         safeExecute(editMessage);
     }
 
-    private void subscribeUser(String nickname, ArrayList<String> subscriptionDetails, Update update) {
-        String subscription = "Подписчик: " + nickname + ", подписка: " + subscriptionDetails.get(0) + ", срок: " + subscriptionDetails.get(1);
-        clearMenu(update, lastMessageId, subscription);
-    }
+
 
     private void uploadContent(String description, ArrayList<String> uploadDetails, Update update) {
         String trimedDescription;

@@ -16,16 +16,21 @@ public class MenuBuilder {
                 : update.getCallbackQuery().getMessage().getChatId().toString();
 
         InlineKeyboardButton btn1 = InlineKeyboardButton.builder()
-                .text("Добавить подписку")
+                .text("Подписка")
                 .callbackData("SUBSCRIPTION")
                 .build();
 
         InlineKeyboardButton btn2 = InlineKeyboardButton.builder()
-                .text("Загрузить контент")
+                .text("Контент")
                 .callbackData("UPLOAD")
                 .build();
 
-        InlineKeyboardRow row1 = new InlineKeyboardRow(btn1, btn2);
+        InlineKeyboardButton btn3 = InlineKeyboardButton.builder()
+                .text("Администраторы")
+                .callbackData("ADMIN")
+                .build();
+
+        InlineKeyboardRow row1 = new InlineKeyboardRow(btn1, btn2, btn3);
 
         return InlineKeyboardMarkup.builder()
                 .keyboardRow(row1)
@@ -184,6 +189,53 @@ public class MenuBuilder {
         InlineKeyboardButton btn1 = InlineKeyboardButton.builder()
                 .text("← Назад")
                 .callbackData("BACK-TO-UPLOAD")
+                .build();
+
+        InlineKeyboardRow row1 = new InlineKeyboardRow(btn1);
+
+        return InlineKeyboardMarkup.builder()
+                .keyboardRow(row1)
+                .build();
+    }
+
+    public InlineKeyboardMarkup getAdmin(Update update) {
+        String chatId = update.hasMessage()
+                ? update.getMessage().getChatId().toString()
+                : update.getCallbackQuery().getMessage().getChatId().toString();
+
+        InlineKeyboardButton btn1 = InlineKeyboardButton.builder()
+                .text("Добавить администратора")
+                .callbackData("ADD")
+                .build();
+
+        InlineKeyboardButton btn2 = InlineKeyboardButton.builder()
+                .text("Удалить администратора")
+                .callbackData("REMOVE")
+                .build();
+
+        InlineKeyboardButton btn3 = InlineKeyboardButton.builder()
+                .text("← Назад")
+                .callbackData("BACK-TO-MAIN")
+                .build();
+
+        InlineKeyboardRow row1 = new InlineKeyboardRow(btn1, btn2);
+        InlineKeyboardRow row2 = new InlineKeyboardRow(btn3);
+
+        return InlineKeyboardMarkup.builder()
+                .keyboardRow(row1)
+                .keyboardRow(row2)
+                .build();
+
+    }
+
+    public InlineKeyboardMarkup getAppointment(Update update) {
+        String chatId = update.hasMessage()
+                ? update.getMessage().getChatId().toString()
+                : update.getCallbackQuery().getMessage().getChatId().toString();
+
+        InlineKeyboardButton btn1 = InlineKeyboardButton.builder()
+                .text("← Назад")
+                .callbackData("BACK-TO-ADMIN")
                 .build();
 
         InlineKeyboardRow row1 = new InlineKeyboardRow(btn1);

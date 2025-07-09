@@ -22,7 +22,7 @@ public class MessageBuilder {
                 .build();
     }
 
-    public EditMessageText editMessage (Update update, Integer messageId , InlineKeyboardMarkup markup, String text) {
+    public EditMessageText editMessage(Update update, Integer messageId, InlineKeyboardMarkup markup, String text) {
 
         String chatId = update.hasMessage()
                 ? update.getMessage().getChatId().toString()

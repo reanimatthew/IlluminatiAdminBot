@@ -7,5 +7,7 @@ public enum MenuState {
     NICKNAME_MENU,
     UPLOAD_MENU,
     FILE_MENU,
-    DESCRIPTION_MENU
+    DESCRIPTION_MENU,
+    ADMIN_MENU,
+    APPOINTMENT_MENU
 }
