@@ -1,12 +1,16 @@
 package org.example.illuminatiadminbot.service;
 
 import lombok.AllArgsConstructor;
+import org.example.illuminatiadminbot.inbound.model.UploadDetails;
 import org.example.illuminatiadminbot.outbound.model.GroupUser;
+import org.example.illuminatiadminbot.outbound.model.MinioFileDetail;
 import org.example.illuminatiadminbot.outbound.repository.BotMinioClient;
 import org.example.illuminatiadminbot.outbound.repository.GroupUserRepository;
+import org.example.illuminatiadminbot.outbound.repository.MinioFileDetailRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.InputStream;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Optional;
@@ -17,6 +21,7 @@ public class AdminBotService {
 
     private final GroupUserRepository groupUserRepository;
     private final BotMinioClient botMinioClient;
+    private final MinioFileDetailRepository minioFileDetailRepository;
 
     @Transactional
     public String adminAddOrRemove(Long adminTelegramId, String adminAction) {
@@ -81,15 +86,20 @@ public class AdminBotService {
         return null;
     }
 
-    public String uploadFile(ArrayList<String> uploadDetails) {
+    public String uploadFile(UploadDetails uploadDetails, String fileName, InputStream uploadFile) {
+        return botMinioClient.uploadFileToMinio(uploadDetails.getFileType(), fileName, uploadFile);
+    }
 
-        String contentType = uploadDetails.get(0);
+    @Transactional
+    public MinioFileDetail uploadFileDescription(String fileDescription, UploadDetails uploadDetails) {
+        MinioFileDetail minioFileDetail = MinioFileDetail.builder()
+                .name(uploadDetails.getFileName())
+                .path(uploadDetails.getFilePath())
+                .type(uploadDetails.getFileType())
+                .description(fileDescription)
+                .build();
 
-        return switch (contentType) {
-            case "TEXT" -> botMinioClient.uploadText(uploadDetails);
-            case "AUDIO" -> botMinioClient.uploadAudio(uploadDetails);
-            case "VIDEO" -> botMinioClient.uploadVideo(uploadDetails);
-            default -> throw new RuntimeException("Что-то сломалось в AdminBotService uploadFile");
-        };
+        minioFileDetailRepository.save(minioFileDetail);
+        return minioFileDetail;
     }
 }

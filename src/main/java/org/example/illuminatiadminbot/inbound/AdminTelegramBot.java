@@ -4,16 +4,18 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.illuminatiadminbot.inbound.menu.MenuBuilder;
 import org.example.illuminatiadminbot.inbound.menu.MenuState;
 import org.example.illuminatiadminbot.inbound.menu.MessageBuilder;
-import org.example.illuminatiadminbot.outbound.model.GroupUser;
+import org.example.illuminatiadminbot.inbound.model.UploadDetails;
+import org.example.illuminatiadminbot.outbound.model.MinioFileDetail;
 import org.example.illuminatiadminbot.service.AdminBotService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 import org.telegram.telegrambots.longpolling.interfaces.LongPollingUpdateConsumer;
 import org.telegram.telegrambots.longpolling.starter.SpringLongPollingBot;
 import org.telegram.telegrambots.longpolling.util.LongPollingSingleThreadUpdateConsumer;
+import org.telegram.telegrambots.meta.api.methods.GetFile;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
+import org.telegram.telegrambots.meta.api.objects.File;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.User;
 import org.telegram.telegrambots.meta.api.objects.message.Message;
@@ -21,6 +23,8 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMa
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -34,7 +38,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
     private final MenuBuilder menuBuilder;
     private final MessageBuilder messageBuilder;
     private final ArrayList<String> subscriptionDetails = new ArrayList<>(List.of("", ""));
-    private final ArrayList<String> uploadDetails = new ArrayList<>(List.of("", ""));
+    private UploadDetails uploadDetails;
     private String adminStatus = "";
     private MenuState menuState = MenuState.MAIN_MENU;
     private Integer lastMessageId = null;
@@ -49,12 +53,15 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
         this.menuBuilder = menuBuilder;
         this.messageBuilder = messageBuilder;
         this.adminBotService = adminBotService;
+        uploadDetails = new UploadDetails();
     }
 
     @Override
     public void consume(Update update) {
         String text = "";
         String data = "";
+
+//        log.warn(update.getMessage().getChatId().toString());
 
         User from = update.hasMessage()
                 ? update.getMessage().getFrom()
@@ -90,8 +97,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
             if (text.equals("/menu") || text.equals("/cancel") || text.equals("/start")) {
                 subscriptionDetails.set(0, "");
                 subscriptionDetails.set(1, "");
-                uploadDetails.set(0, "");
-                uploadDetails.set(1, "");
+                uploadDetails.clearUploadDetails();
                 adminStatus = "";
                 menuState = MenuState.MAIN_MENU;
                 InlineKeyboardMarkup markup = menuBuilder.getMain(update);
@@ -116,8 +122,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                     EditMessageText editMessage = messageBuilder.editMessage(update, lastMessageId, markup, "Выберите подписку:");
                     safeExecute(editMessage);
                 } else if ("UPLOAD".equals(data)) {
-                    uploadDetails.set(0, "");
-                    uploadDetails.set(1, "");
+                    uploadDetails.clearUploadDetails();
                     menuState = MenuState.UPLOAD_MENU;
                     InlineKeyboardMarkup markup = menuBuilder.getUpload(update);
                     EditMessageText editMessage = messageBuilder.editMessage(update, lastMessageId, markup, "Выберите тип контента:");
@@ -185,15 +190,13 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
 
             case UPLOAD_MENU -> {
                 if (List.of("TEXT", "AUDIO", "VIDEO").contains(data)) {
-                    uploadDetails.set(0, data);
-                    uploadDetails.set(1, "");
+                    uploadDetails.setFileType(data);
                     menuState = MenuState.FILE_MENU;
                     InlineKeyboardMarkup markup = menuBuilder.getFile(update);
-                    EditMessageText editMessage = messageBuilder.editMessage(update, lastMessageId, markup, "Контент: " + uploadDetails.get(0) + "\nЗагрузите файл.");
+                    EditMessageText editMessage = messageBuilder.editMessage(update, lastMessageId, markup, "Контент: " + uploadDetails.getFileType() + "\nЗагрузите файл.");
                     safeExecute(editMessage);
                 } else if ("BACK-TO-MAIN".equals(data)) {
-                    uploadDetails.set(0, "");
-                    uploadDetails.set(1, "");
+                    uploadDetails.clearUploadDetails();
                     menuState = MenuState.MAIN_MENU;
                     InlineKeyboardMarkup markup = menuBuilder.getMain(update);
                     EditMessageText editMessage = messageBuilder.editMessage(update, lastMessageId, markup, "Выберите действие:");
@@ -202,42 +205,39 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
             }
 
             case FILE_MENU -> {
-                if ("TEXT".equals(uploadDetails.get(0)) && update.hasMessage() && update.getMessage().hasDocument()) {
+                if (update.hasMessage() && update.getMessage().hasDocument()) {
                     String fileId = update.getMessage().getDocument().getFileId();
-                    uploadDetails.set(1, fileId);
-                    adminBotService.uploadFile(uploadDetails);
+                    String fileName = update.getMessage().getDocument().getFileName();
+                    uploadDetails.setFileName(fileName);
+
+                    File uploadFile;
+                    try {
+                        uploadFile = telegramClient.execute(new GetFile(fileId));
+                    } catch (TelegramApiException e) {
+                        throw new RuntimeException(e);
+                    }
+
+                    try (InputStream fileStream = telegramClient.downloadFileAsStream(uploadFile)) {
+                        String minioFilePath = adminBotService.uploadFile(uploadDetails, fileName, fileStream);
+                        uploadDetails.setFilePath(minioFilePath);
+                    } catch (TelegramApiException | IOException e) {
+                        throw new RuntimeException(e);
+                    }
+
                     menuState = MenuState.DESCRIPTION_MENU;
-                    clearMenu(update, lastMessageId, "Документ загружен");
+                    clearMenu(update, lastMessageId, "Файл " + fileName + " загружен.");
                     InlineKeyboardMarkup markup = menuBuilder.getDescription(update);
-                    SendMessage sendMessage = messageBuilder.createMessage(update, markup, "Введите описание");
-                    lastMessageId = safeExecute(sendMessage).getMessageId();
-                } else if ("AUDIO".equals(uploadDetails.get(0)) && update.hasMessage() && update.getMessage().hasAudio()) {
-                    String fileId = update.getMessage().getAudio().getFileId();
-                    uploadDetails.set(1, fileId);
-                    menuState = MenuState.DESCRIPTION_MENU;
-                    clearMenu(update, lastMessageId, "Аудио загружено");
-                    InlineKeyboardMarkup markup = menuBuilder.getDescription(update);
-                    SendMessage sendMessage = messageBuilder.createMessage(update, markup, "Введите описание");
-                    lastMessageId = safeExecute(sendMessage).getMessageId();
-                } else if ("VIDEO".equals(uploadDetails.get(0)) && update.hasMessage() && update.getMessage().hasVideo()) {
-                    String fileId = update.getMessage().getVideo().getFileId();
-                    uploadDetails.set(1, fileId);
-                    menuState = MenuState.DESCRIPTION_MENU;
-                    clearMenu(update, lastMessageId, "Видео загружено");
-                    InlineKeyboardMarkup markup = menuBuilder.getDescription(update);
-                    SendMessage sendMessage = messageBuilder.createMessage(update, markup, "Введите описание");
+                    SendMessage sendMessage = messageBuilder.createMessage(update, markup, "Введите описание к файлу.");
                     lastMessageId = safeExecute(sendMessage).getMessageId();
                 } else if ("BACK-TO-UPLOAD".equals(data)) {
-                    uploadDetails.set(0, "");
-                    uploadDetails.set(1, "");
+                    uploadDetails.clearFileType();
                     menuState = MenuState.UPLOAD_MENU;
                     InlineKeyboardMarkup markup = menuBuilder.getUpload(update);
                     EditMessageText editMessage = messageBuilder.editMessage(update, lastMessageId, markup, "Выберите тип контента:");
                     safeExecute(editMessage);
                 } else {
-                    clearMenu(update, lastMessageId, "Несоответствие файла указанному типу.");
-                    uploadDetails.set(0, "");
-                    uploadDetails.set(1, "");
+                    clearMenu(update, lastMessageId, "Вы что-то не то делаете. Давайте заново.");
+                    uploadDetails.clearFileType();
                     menuState = MenuState.UPLOAD_MENU;
                     InlineKeyboardMarkup markup = menuBuilder.getUpload(update);
                     SendMessage sendMessage = messageBuilder.createMessage(update, markup, "Выберите тип контента:");
@@ -247,10 +247,10 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
 
             case DESCRIPTION_MENU -> {
                 if (!text.isEmpty()) {
-                    uploadContent(text, uploadDetails, update);
+                    MinioFileDetail minioFileDetail = adminBotService.uploadFileDescription(text, uploadDetails);
+                    uploadContentConfirmation(minioFileDetail.getDescription(), uploadDetails, update);
                 } else if ("BACK-TO-UPLOAD".equals(data)) {
-                    uploadDetails.set(0, "");
-                    uploadDetails.set(1, "");
+                    uploadDetails.clearUploadDetails();
                     menuState = MenuState.UPLOAD_MENU;
                     InlineKeyboardMarkup markup = menuBuilder.getUpload(update);
                     EditMessageText editMessage = messageBuilder.editMessage(update, lastMessageId, markup, "Выберите тип контента:");
@@ -341,15 +341,14 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
     }
 
 
-
-    private void uploadContent(String description, ArrayList<String> uploadDetails, Update update) {
+    private void uploadContentConfirmation(String description, UploadDetails uploadDetails, Update update) {
         String trimedDescription;
         if (description.length() > 10) {
             trimedDescription = description.substring(0, 10) + "...";
         } else {
             trimedDescription = description;
         }
-        String upload = "Загружен контент: " + uploadDetails.get(0) + ", fileId: " + uploadDetails.get(1) + ", описание: " + trimedDescription;
+        String upload = "Загружен контент: " + uploadDetails.getFileType() + ", описание: " + trimedDescription;
         clearMenu(update, lastMessageId, upload);
     }
 

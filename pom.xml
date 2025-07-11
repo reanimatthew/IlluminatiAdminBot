@@ -29,6 +29,26 @@
     <properties>
         <java.version>24</java.version>
     </properties>
+    <repositories>
+        <!-- Add the following repository -->
+        <repository>
+            <id>mchv</id>
+            <name>MCHV Apache Maven Packages</name>
+            <url>https://mvn.mchv.eu/repository/mchv/</url>
+        </repository>
+    </repositories>
+    <dependencyManagement>
+        <dependencies>
+            <!-- Импортируем BOM, чтобы версии подтягивались автоматически -->
+            <dependency>
+                <groupId>it.tdlight</groupId>
+                <artifactId>tdlight-java-bom</artifactId>
+                <version>3.4.2+td.1.8.35</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -78,6 +98,18 @@
                 <artifactId>minio</artifactId>
                 <version>8.5.17</version>
             </dependency>
+        <!-- Сам Java-API без указания версии (берётся из BOM) -->
+        <dependency>
+            <groupId>it.tdlight</groupId>
+            <artifactId>tdlight-java</artifactId>
+        </dependency>
+        <!-- Нативные библиотеки для Linux x86_64 + GNU + OpenSSL1 -->
+        <dependency>
+            <groupId>it.tdlight</groupId>
+            <artifactId>tdlight-natives</artifactId>
+<!--            TODO заменить при деплое на Linux-->
+            <classifier>windows_amd64</classifier>
+        </dependency>
     </dependencies>
 
     <build>

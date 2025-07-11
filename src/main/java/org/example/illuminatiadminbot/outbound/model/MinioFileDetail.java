@@ -4,36 +4,27 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
-import java.time.LocalDate;
-
 @Entity
-
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @AllArgsConstructor(access = AccessLevel.PROTECTED)
 @NoArgsConstructor
 @Builder
 @Data
-public class GroupUser {
+public class MinioFileDetail {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @Column
-    Long telegramId;
+    private String name;
 
     @Column
-    String nickname;
+    private String type;
 
     @Column
-    String role;
+    private String path;
 
     @Column
-    String subscriptionType;
-
-    @Column
-    Integer subscriptionDuration;
-
-    @Column
-    LocalDate subscriptionExpiration;
+    private String description;
 }
