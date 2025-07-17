@@ -1,5 +1,7 @@
 package org.example.illuminatiadminbot.inbound;
 
+import it.tdlight.jni.TdApi;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.example.illuminatiadminbot.inbound.menu.MenuBuilder;
 import org.example.illuminatiadminbot.inbound.menu.MenuState;
@@ -7,6 +9,7 @@ import org.example.illuminatiadminbot.inbound.menu.MessageBuilder;
 import org.example.illuminatiadminbot.inbound.model.UploadDetails;
 import org.example.illuminatiadminbot.outbound.model.MinioFileDetail;
 import org.example.illuminatiadminbot.service.AdminBotService;
+import org.example.illuminatiadminbot.service.SupergroupService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.longpolling.interfaces.LongPollingUpdateConsumer;
@@ -29,6 +32,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 @Slf4j
 @Component
@@ -42,16 +48,18 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
     private String adminStatus = "";
     private MenuState menuState = MenuState.MAIN_MENU;
     private Integer lastMessageId = null;
+    private final SupergroupService supergroupService;
 
     private final AdminBotService adminBotService;
 
     @Value("${telegram.bot.token}")
     private String token;
 
-    public AdminTelegramBot(TelegramClient telegramClient, MenuBuilder menuBuilder, MessageBuilder messageBuilder, AdminBotService adminBotService) {
+    public AdminTelegramBot(TelegramClient telegramClient, MenuBuilder menuBuilder, MessageBuilder messageBuilder, SupergroupService supergroupService, AdminBotService adminBotService) {
         this.telegramClient = telegramClient;
         this.menuBuilder = menuBuilder;
         this.messageBuilder = messageBuilder;
+        this.supergroupService = supergroupService;
         this.adminBotService = adminBotService;
         uploadDetails = new UploadDetails();
     }
@@ -60,6 +68,17 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
     public void consume(Update update) {
         String text = "";
         String data = "";
+
+
+        try {
+            log.warn(supergroupService.getAllMembers());
+        } catch (ExecutionException e) {
+            throw new RuntimeException(e);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } catch (TimeoutException e) {
+            throw new RuntimeException(e);
+        }
 
 //        log.warn(update.getMessage().getChatId().toString());
 
@@ -361,4 +380,5 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
     public LongPollingUpdateConsumer getUpdatesConsumer() {
         return this;
     }
+
 }

@@ -32,7 +32,7 @@ public class GroupUser {
     String subscriptionType;
 
     @Column
-    Integer subscriptionDuration;
+    int subscriptionDuration;
 
     @Column
     LocalDate subscriptionExpiration;

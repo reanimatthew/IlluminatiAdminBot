@@ -50,7 +50,7 @@ public class AdminBotService {
     public String subscribeUser(String nickname, ArrayList<String> subscriptionDetails) {
         String subscriptionType = subscriptionDetails.get(0);
         String numOfMonth = subscriptionDetails.get(1);
-        Integer subscribeDuration = Integer.parseInt(numOfMonth.substring(0, numOfMonth.length() - 1));
+        int subscribeDuration = Integer.parseInt(numOfMonth.substring(0, numOfMonth.length() - 1));
         LocalDate expirationDate = LocalDate.now().plusMonths(subscribeDuration);
         GroupUser groupUser;
         Optional<GroupUser> userOptional = groupUserRepository.findByNickname(nickname);
