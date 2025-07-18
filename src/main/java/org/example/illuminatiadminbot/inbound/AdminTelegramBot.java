@@ -1,11 +1,10 @@
 package org.example.illuminatiadminbot.inbound;
 
-import it.tdlight.jni.TdApi;
-import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.example.illuminatiadminbot.inbound.menu.MenuBuilder;
 import org.example.illuminatiadminbot.inbound.menu.MenuState;
 import org.example.illuminatiadminbot.inbound.menu.MessageBuilder;
+import org.example.illuminatiadminbot.inbound.menu.ThemeState;
 import org.example.illuminatiadminbot.inbound.model.UploadDetails;
 import org.example.illuminatiadminbot.outbound.model.MinioFileDetail;
 import org.example.illuminatiadminbot.service.AdminBotService;
@@ -28,13 +27,7 @@ import org.telegram.telegrambots.meta.generics.TelegramClient;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.*;
 
 @Slf4j
 @Component
@@ -70,17 +63,28 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
         String data = "";
 
 
-        try {
-            log.warn(supergroupService.getAllMembers());
-        } catch (ExecutionException e) {
-            throw new RuntimeException(e);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        } catch (TimeoutException e) {
-            throw new RuntimeException(e);
-        }
+//        try {
+//            log.warn(supergroupService.getAllMembers());
+//        } catch (ExecutionException e) {
+//            throw new RuntimeException(e);
+//        } catch (InterruptedException e) {
+//            throw new RuntimeException(e);
+//        } catch (TimeoutException e) {
+//            throw new RuntimeException(e);
+//        }
 
 //        log.warn(update.getMessage().getChatId().toString());
+
+//        try {
+//            SendMessage sendMessage = SendMessage.builder()
+//                    .chatId(-1002844998465L)
+//                    .messageThreadId(16)
+//                    .text("Тестовое сообщение в Charisma")
+//                    .build();
+//            telegramClient.execute(sendMessage);
+//        } catch (TelegramApiException e) {
+//            throw new RuntimeException(e);
+//        }
 
         User from = update.hasMessage()
                 ? update.getMessage().getFrom()
@@ -142,9 +146,9 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                     safeExecute(editMessage);
                 } else if ("UPLOAD".equals(data)) {
                     uploadDetails.clearUploadDetails();
-                    menuState = MenuState.UPLOAD_MENU;
-                    InlineKeyboardMarkup markup = menuBuilder.getUpload(update);
-                    EditMessageText editMessage = messageBuilder.editMessage(update, lastMessageId, markup, "Выберите тип контента:");
+                    menuState = MenuState.THEME_MENU;
+                    InlineKeyboardMarkup markup = menuBuilder.getTheme(update);
+                    EditMessageText editMessage = messageBuilder.editMessage(update, lastMessageId, markup, "Выберите топик:");
                     safeExecute(editMessage);
                 } else if ("ADMIN".equals(data)) {
                     adminStatus = "";
@@ -207,6 +211,22 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                 }
             }
 
+            case THEME_MENU -> {
+                if (ThemeState.contains(data)) {
+                    uploadDetails.setTheme(data);
+                    menuState = MenuState.UPLOAD_MENU;
+                    InlineKeyboardMarkup markup = menuBuilder.getUpload(update);
+                    EditMessageText editMessage = messageBuilder.editMessage(update, lastMessageId, markup, "Загрузим файл в топик: " + uploadDetails.getTheme() + "\nВыберите тип контента.");
+                    safeExecute(editMessage);
+                } else if ("BACK-TO-MAIN".equals(data)) {
+                    uploadDetails.clearUploadDetails();
+                    menuState = MenuState.MAIN_MENU;
+                    InlineKeyboardMarkup markup = menuBuilder.getMain(update);
+                    EditMessageText editMessage = messageBuilder.editMessage(update, lastMessageId, markup, "Выберите действие:");
+                    safeExecute(editMessage);
+                }
+            }
+
             case UPLOAD_MENU -> {
                 if (List.of("TEXT", "AUDIO", "VIDEO").contains(data)) {
                     uploadDetails.setFileType(data);
@@ -214,7 +234,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                     InlineKeyboardMarkup markup = menuBuilder.getFile(update);
                     EditMessageText editMessage = messageBuilder.editMessage(update, lastMessageId, markup, "Контент: " + uploadDetails.getFileType() + "\nЗагрузите файл.");
                     safeExecute(editMessage);
-                } else if ("BACK-TO-MAIN".equals(data)) {
+                } else if ("BACK-TO-THEME".equals(data)) {
                     uploadDetails.clearUploadDetails();
                     menuState = MenuState.MAIN_MENU;
                     InlineKeyboardMarkup markup = menuBuilder.getMain(update);

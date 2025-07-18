@@ -5,6 +5,7 @@ public enum MenuState {
     SUBSCRIPTION_MENU,
     DURATION_MENU,
     NICKNAME_MENU,
+    THEME_MENU,
     UPLOAD_MENU,
     FILE_MENU,
     DESCRIPTION_MENU,

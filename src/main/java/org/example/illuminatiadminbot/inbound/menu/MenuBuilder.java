@@ -129,6 +129,46 @@ public class MenuBuilder {
                 .build();
     }
 
+    public InlineKeyboardMarkup getTheme(Update update) {
+
+        String chatId = update.hasMessage()
+                ? update.getMessage().getChatId().toString()
+                : update.getCallbackQuery().getMessage().getChatId().toString();
+
+        InlineKeyboardButton btn1 = InlineKeyboardButton.builder()
+                .text(ThemeState.STRENGTH.getDisplayName())
+                .callbackData(ThemeState.STRENGTH.name())
+                .build();
+
+        InlineKeyboardButton btn2 = InlineKeyboardButton.builder()
+                .text(ThemeState.PERCEPTION.getDisplayName())
+                .callbackData(ThemeState.PERCEPTION.name())
+                .build();
+
+        InlineKeyboardButton btn3 = InlineKeyboardButton.builder()
+                .text(ThemeState.ENDURANCE.getDisplayName())
+                .callbackData(ThemeState.ENDURANCE.name())
+                .build();
+
+        InlineKeyboardButton btn4 = InlineKeyboardButton.builder()
+                .text(ThemeState.CHARISMA.getDisplayName())
+                .callbackData(ThemeState.CHARISMA.name())
+                .build();
+
+        InlineKeyboardButton btn5 = InlineKeyboardButton.builder()
+                .text("← Назад")
+                .callbackData("BACK-TO-MAIN")
+                .build();
+
+        InlineKeyboardRow row1 = new InlineKeyboardRow(btn1, btn2, btn3, btn4);
+        InlineKeyboardRow row2 = new InlineKeyboardRow(btn5);
+
+        return InlineKeyboardMarkup.builder()
+                .keyboardRow(row1)
+                .keyboardRow(row2)
+                .build();
+    }
+
     public InlineKeyboardMarkup getUpload(Update update) {
 
         String chatId = update.hasMessage()

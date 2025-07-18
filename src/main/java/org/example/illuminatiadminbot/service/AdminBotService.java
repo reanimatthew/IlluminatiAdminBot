@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import org.example.illuminatiadminbot.inbound.model.UploadDetails;
 import org.example.illuminatiadminbot.outbound.model.GroupUser;
 import org.example.illuminatiadminbot.outbound.model.MinioFileDetail;
+import org.example.illuminatiadminbot.outbound.model.MinioFileNameDetail;
 import org.example.illuminatiadminbot.outbound.repository.BotMinioClient;
 import org.example.illuminatiadminbot.outbound.repository.GroupUserRepository;
 import org.example.illuminatiadminbot.outbound.repository.MinioFileDetailRepository;
@@ -87,7 +88,9 @@ public class AdminBotService {
     }
 
     public String uploadFile(UploadDetails uploadDetails, String fileName, InputStream uploadFile) {
-        return botMinioClient.uploadFileToMinio(uploadDetails.getFileType(), fileName, uploadFile);
+        MinioFileNameDetail detail = botMinioClient.uploadFileToMinio(uploadDetails.getFileType(), fileName, uploadFile);
+        botMinioClient.uploadFileToMinio(detail);
+        return
     }
 
     @Transactional
