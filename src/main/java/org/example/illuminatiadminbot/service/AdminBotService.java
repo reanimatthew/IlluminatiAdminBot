@@ -89,7 +89,7 @@ public class AdminBotService {
 
     public String uploadFile(UploadDetails uploadDetails, String fileName, InputStream uploadFile) {
         MinioFileNameDetail detail = botMinioClient.uploadFileToMinio(uploadDetails.getFileType(), fileName, uploadFile);
-        botMinioClient.uploadFileToMinio(detail);
+        botMinioClient.getInputFileFromMinio(detail);
         return
     }
 
