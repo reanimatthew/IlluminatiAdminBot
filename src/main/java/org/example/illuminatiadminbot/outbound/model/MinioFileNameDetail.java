@@ -8,6 +8,6 @@ import lombok.experimental.FieldDefaults;
 @Builder
 @Data
 public class MinioFileNameDetail {
-    String fileName;
+    String minioFilePath;
     String minioFileName;
 }

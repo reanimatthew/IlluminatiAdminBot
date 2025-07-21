@@ -1,6 +1,9 @@
 package org.example.illuminatiadminbot.configuration;
 
 import io.minio.MinioClient;
+import it.tdlight.Init;
+import it.tdlight.Log;
+import it.tdlight.Slf4JLogMessageHandler;
 import it.tdlight.client.*;
 import it.tdlight.util.UnsupportedNativeLibraryException;
 import org.springframework.beans.factory.annotation.Value;
@@ -9,12 +12,11 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.telegram.telegrambots.client.okhttp.OkHttpTelegramClient;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
-import it.tdlight.*;
 
 import java.nio.file.Paths;
 
 @Configuration
-@EnableConfigurationProperties({MinioProperties.class, MtprotoProperties.class})
+@EnableConfigurationProperties({MinioProperties.class, MtprotoProperties.class, TopicProperties.class})
 public class AdminBotConfiguration {
 
     private final MinioProperties minioProperties;

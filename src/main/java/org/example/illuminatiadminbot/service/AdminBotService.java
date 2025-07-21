@@ -10,6 +10,7 @@ import org.example.illuminatiadminbot.outbound.repository.GroupUserRepository;
 import org.example.illuminatiadminbot.outbound.repository.MinioFileDetailRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.telegram.telegrambots.meta.api.objects.InputFile;
 
 import java.io.InputStream;
 import java.time.LocalDate;
@@ -87,17 +88,18 @@ public class AdminBotService {
         return null;
     }
 
-    public String uploadFile(UploadDetails uploadDetails, String fileName, InputStream uploadFile) {
-        MinioFileNameDetail detail = botMinioClient.uploadFileToMinio(uploadDetails.getFileType(), fileName, uploadFile);
-        botMinioClient.getInputFileFromMinio(detail);
-        return
+    public InputFile uploadFile(UploadDetails uploadDetails, InputStream uploadFile) {
+        MinioFileNameDetail detail = botMinioClient.uploadFileToMinio(uploadDetails, uploadFile);
+        uploadDetails.setMinioFilePath(detail.getMinioFilePath());
+        uploadDetails.setMinioFileName(detail.getMinioFileName());
+        return botMinioClient.getInputFileFromMinio(detail);
     }
 
     @Transactional
     public MinioFileDetail uploadFileDescription(String fileDescription, UploadDetails uploadDetails) {
         MinioFileDetail minioFileDetail = MinioFileDetail.builder()
                 .name(uploadDetails.getFileName())
-                .path(uploadDetails.getFilePath())
+                .path(uploadDetails.getMinioFilePath())
                 .type(uploadDetails.getFileType())
                 .description(fileDescription)
                 .build();
