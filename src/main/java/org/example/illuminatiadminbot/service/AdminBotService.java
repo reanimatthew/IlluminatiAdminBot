@@ -2,6 +2,7 @@ package org.example.illuminatiadminbot.service;
 
 import lombok.AllArgsConstructor;
 import org.example.illuminatiadminbot.inbound.model.UploadDetails;
+import org.example.illuminatiadminbot.outbound.dto.GroupUserDto;
 import org.example.illuminatiadminbot.outbound.model.GroupUser;
 import org.example.illuminatiadminbot.outbound.model.MinioFileDetail;
 import org.example.illuminatiadminbot.outbound.model.MinioFileNameDetail;
@@ -15,6 +16,8 @@ import org.telegram.telegrambots.meta.api.objects.InputFile;
 import java.io.InputStream;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 
 @Service
@@ -91,7 +94,7 @@ public class AdminBotService {
     public InputFile uploadFile(UploadDetails uploadDetails, InputStream uploadFile) {
         MinioFileNameDetail detail = botMinioClient.uploadFileToMinio(uploadDetails, uploadFile);
         uploadDetails.setMinioFilePath(detail.getMinioFilePath());
-        uploadDetails.setMinioFileName(detail.getMinioFileName());
+        uploadDetails.setMinioFileName(detail.getOriginalFileName());
         return botMinioClient.getInputFileFromMinio(detail);
     }
 
@@ -106,5 +109,22 @@ public class AdminBotService {
 
         minioFileDetailRepository.save(minioFileDetail);
         return minioFileDetail;
+    }
+
+    @Transactional
+    public boolean deleteUser(String nickname) {
+        Optional<GroupUser> groupUserOptional = groupUserRepository.findByNickname(nickname);
+        try {
+            GroupUser groupUser = groupUserOptional.orElseThrow();
+            groupUserRepository.delete(groupUser);
+        } catch (NoSuchElementException _) {
+            return false;
+        }
+        return true;
+    }
+
+    @Transactional
+    public List<GroupUser> getAllUsers() {
+        return groupUserRepository.findAll();
     }
 }

@@ -30,7 +30,12 @@ public class MenuBuilder {
                 .callbackData("ADMIN")
                 .build();
 
-        InlineKeyboardRow row1 = new InlineKeyboardRow(btn1, btn2, btn3);
+        InlineKeyboardButton btn4 = InlineKeyboardButton.builder()
+                .text("Удаление пользователя")
+                .callbackData("DELETE-USER")
+                .build();
+
+        InlineKeyboardRow row1 = new InlineKeyboardRow(btn1, btn2, btn3, btn4);
 
         return InlineKeyboardMarkup.builder()
                 .keyboardRow(row1)
@@ -285,4 +290,20 @@ public class MenuBuilder {
                 .build();
     }
 
+    public InlineKeyboardMarkup getDeleteUser(Update update) {
+        String chatId = update.hasMessage()
+                ? update.getMessage().getChatId().toString()
+                : update.getCallbackQuery().getMessage().getChatId().toString();
+
+        InlineKeyboardButton btn1 = InlineKeyboardButton.builder()
+                .text("← Назад")
+                .callbackData("BACK-TO-MAIN")
+                .build();
+
+        InlineKeyboardRow row1 = new InlineKeyboardRow(btn1);
+
+        return InlineKeyboardMarkup.builder()
+                .keyboardRow(row1)
+                .build();
+    }
 }

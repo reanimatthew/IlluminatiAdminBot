@@ -60,5 +60,4 @@ public class AdminBotConfiguration {
         return builder.build(AuthenticationSupplier.consoleLogin());
     }
 
-
 }

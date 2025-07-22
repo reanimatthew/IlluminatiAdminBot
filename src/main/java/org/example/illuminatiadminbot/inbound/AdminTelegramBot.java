@@ -165,6 +165,11 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                     InlineKeyboardMarkup markup = menuBuilder.getAdmin(update);
                     EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Добавить или удалить администратора");
                     safeExecute(editMessage);
+                } else if ("DELETE-USER".equals(data)) {
+                    ctx.menuState = MenuState.DELETE_USER;
+                    InlineKeyboardMarkup markup = menuBuilder.getDeleteUser(update);
+                    EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Введите никнейм пользователя для удаления:");
+                    safeExecute(editMessage);
                 }
             }
 
@@ -367,6 +372,29 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                     InlineKeyboardMarkup markup = menuBuilder.getAdmin(update);
                     EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Добавить или удалить администратора");
                     safeExecute(editMessage);
+                }
+            }
+
+            case DELETE_USER -> {
+                String nickname;
+                if (!text.isEmpty()) {
+                    nickname = text.trim();
+                    if (text.startsWith("@")) {
+                        nickname = text.substring(1);
+                    }
+
+                    if (adminBotService.deleteUser(nickname)) {
+                        clearMenu(update, ctx.lastMessageId, "Пользователь " + nickname + " удалён");
+                    } else {
+                        ctx.menuState = MenuState.DELETE_USER;
+                        InlineKeyboardMarkup markup = menuBuilder.getDeleteUser(update);
+                        SendMessage sendMessage = messageBuilder.createMessage(update, markup, "Нет такого пользователя.\nВведите никнейм пользователя для удаления:");
+                        ctx.lastMessageId = safeExecute(sendMessage).getMessageId();
+                    }
+                } else {
+                    InlineKeyboardMarkup markup = menuBuilder.getDeleteUser(update);
+                    SendMessage sendMessage = messageBuilder.createMessage(update, markup, "Пустой никнейм.\nВведите никнейм пользователя для удаления:");
+                    ctx.lastMessageId = safeExecute(sendMessage).getMessageId();
                 }
             }
         }

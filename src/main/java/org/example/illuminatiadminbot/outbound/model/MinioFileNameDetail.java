@@ -9,5 +9,5 @@ import lombok.experimental.FieldDefaults;
 @Data
 public class MinioFileNameDetail {
     String minioFilePath;
-    String minioFileName;
+    String originalFileName;
 }

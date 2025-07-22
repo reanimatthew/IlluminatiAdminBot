@@ -56,8 +56,7 @@ public class BotMinioClient {
         String base = FilenameUtils.getBaseName(uploadDetails.getFileName());
         String ext = FilenameUtils.getExtension(uploadDetails.getFileName());
         String suffix = ext.isEmpty() ? "" : "." + ext;
-        String newFileName = base + "_" + timestamp + suffix;
-        String objectName = uploadDetails.getFileType().toLowerCase(Locale.ROOT) + "/" + newFileName;
+        String objectName = uploadDetails.getFileType().toLowerCase(Locale.ROOT) + "/" + base + "_" + timestamp + suffix;
         try {
             minioClient.putObject(
                     PutObjectArgs.builder()
@@ -70,13 +69,13 @@ public class BotMinioClient {
             throw new RuntimeException(e);
         }
 
-        return new MinioFileNameDetail(objectName, newFileName);
+        return new MinioFileNameDetail(objectName, uploadDetails.getFileName());
     }
 
     public InputFile getInputFileFromMinio(MinioFileNameDetail detail) {
 
         log.info("MinioFilePath: {}", detail.getMinioFilePath());
-        log.info("MinioFileName: {}", detail.getMinioFileName());
+        log.info("MinioFileName: {}", detail.getOriginalFileName());
 
         InputStream inputStream;
         try {
@@ -89,6 +88,6 @@ public class BotMinioClient {
             throw new RuntimeException(e);
         }
 
-        return new InputFile(inputStream, detail.getMinioFileName());
+        return new InputFile(inputStream, detail.getOriginalFileName());
     }
 }
