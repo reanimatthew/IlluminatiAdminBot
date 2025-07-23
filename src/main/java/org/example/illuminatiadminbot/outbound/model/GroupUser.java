@@ -36,4 +36,10 @@ public class GroupUser {
 
     @Column
     LocalDate subscriptionExpiration;
+
+    @Column
+    String status;
+
+    @Column
+    Long chatId;
 }

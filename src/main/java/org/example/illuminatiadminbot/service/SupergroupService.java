@@ -3,6 +3,7 @@ package org.example.illuminatiadminbot.service;
 import it.tdlight.client.SimpleTelegramClient;
 import it.tdlight.jni.TdApi;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.example.illuminatiadminbot.mapper.GroupUserMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -13,6 +14,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class SupergroupService {
@@ -63,10 +65,15 @@ public class SupergroupService {
                         .send(new TdApi.GetUser(messageSenderUser.userId))      // отправили запрос
                         .get(5, TimeUnit.SECONDS);
             } catch (InterruptedException | ExecutionException | TimeoutException e) {
-                throw new RuntimeException(e);
+                log.warn("Не удалось получить info по пользователю {}", telegramId, e);
+                continue;
             }
 
-            existingUsers.put(telegramId, user.usernames.editableUsername);
+            String username = "";
+            if (user.usernames != null && user.usernames.editableUsername != null) {
+                username = user.usernames.editableUsername;
+            }
+            existingUsers.put(telegramId, username);
         }
 
         return existingUsers;

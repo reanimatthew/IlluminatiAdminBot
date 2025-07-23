@@ -2,7 +2,7 @@ package org.example.illuminatiadminbot.service;
 
 import lombok.AllArgsConstructor;
 import org.example.illuminatiadminbot.inbound.model.UploadDetails;
-import org.example.illuminatiadminbot.outbound.dto.GroupUserDto;
+import org.example.illuminatiadminbot.inbound.model.UserStatus;
 import org.example.illuminatiadminbot.outbound.model.GroupUser;
 import org.example.illuminatiadminbot.outbound.model.MinioFileDetail;
 import org.example.illuminatiadminbot.outbound.model.MinioFileNameDetail;
@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @AllArgsConstructor
@@ -112,11 +113,15 @@ public class AdminBotService {
     }
 
     @Transactional
-    public boolean deleteUser(String nickname) {
-        Optional<GroupUser> groupUserOptional = groupUserRepository.findByNickname(nickname);
+    public boolean banUser(String nickname) {
         try {
-            GroupUser groupUser = groupUserOptional.orElseThrow();
-            groupUserRepository.delete(groupUser);
+            Optional<GroupUser> groupUserOptional = groupUserRepository.findByNickname(nickname);
+            if (groupUserOptional.isEmpty()) {
+                throw new NoSuchElementException();
+            }
+            GroupUser groupUser = groupUserOptional.get();
+            groupUser.setStatus(UserStatus.BANNED.toString());
+            groupUserRepository.save(groupUser);
         } catch (NoSuchElementException _) {
             return false;
         }
@@ -126,5 +131,24 @@ public class AdminBotService {
     @Transactional
     public List<GroupUser> getAllUsers() {
         return groupUserRepository.findAll();
+    }
+
+    public void saveAll(List<GroupUser> realGroupUsers) {
+        if (!realGroupUsers.isEmpty())
+            groupUserRepository.saveAll(realGroupUsers);
+    }
+
+    public List<Long> getAllAdminsChatId() {
+        List<GroupUser> admins = groupUserRepository.findAllByRoleAndChatIdIsNotNull("admin");
+        return admins.stream().map(GroupUser::getChatId).collect(Collectors.toList());
+    }
+
+    public void saveChatId(String nickname, Long ChatId) {
+        Optional<GroupUser> groupUserOptional = groupUserRepository.findByNickname(nickname);
+        if (groupUserOptional.isPresent()) {
+            GroupUser groupUser = groupUserOptional.get();
+            groupUser.setChatId(ChatId);
+            groupUserRepository.save(groupUser);
+        }
     }
 }

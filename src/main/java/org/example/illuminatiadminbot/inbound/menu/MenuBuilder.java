@@ -31,8 +31,8 @@ public class MenuBuilder {
                 .build();
 
         InlineKeyboardButton btn4 = InlineKeyboardButton.builder()
-                .text("Удаление пользователя")
-                .callbackData("DELETE-USER")
+                .text("Блокировка пользователя")
+                .callbackData("BAN-USER")
                 .build();
 
         InlineKeyboardRow row1 = new InlineKeyboardRow(btn1, btn2, btn3, btn4);
@@ -290,7 +290,7 @@ public class MenuBuilder {
                 .build();
     }
 
-    public InlineKeyboardMarkup getDeleteUser(Update update) {
+    public InlineKeyboardMarkup getBanUser(Update update) {
         String chatId = update.hasMessage()
                 ? update.getMessage().getChatId().toString()
                 : update.getCallbackQuery().getMessage().getChatId().toString();

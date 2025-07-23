@@ -1,5 +1,6 @@
 package org.example.illuminatiadminbot.inbound;
 
+import it.tdlight.jni.TdApi;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.example.illuminatiadminbot.configuration.TopicProperties;
@@ -8,6 +9,7 @@ import org.example.illuminatiadminbot.inbound.menu.MenuState;
 import org.example.illuminatiadminbot.inbound.menu.MessageBuilder;
 import org.example.illuminatiadminbot.inbound.menu.ThemeState;
 import org.example.illuminatiadminbot.inbound.model.UploadDetails;
+import org.example.illuminatiadminbot.outbound.model.GroupUser;
 import org.example.illuminatiadminbot.outbound.model.MinioFileDetail;
 import org.example.illuminatiadminbot.service.AdminBotService;
 import org.example.illuminatiadminbot.service.SupergroupService;
@@ -17,6 +19,8 @@ import org.telegram.telegrambots.longpolling.interfaces.LongPollingUpdateConsume
 import org.telegram.telegrambots.longpolling.starter.SpringLongPollingBot;
 import org.telegram.telegrambots.longpolling.util.LongPollingSingleThreadUpdateConsumer;
 import org.telegram.telegrambots.meta.api.methods.GetFile;
+import org.telegram.telegrambots.meta.api.methods.groupadministration.BanChatMember;
+import org.telegram.telegrambots.meta.api.methods.groupadministration.UnbanChatMember;
 import org.telegram.telegrambots.meta.api.methods.send.SendDocument;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
@@ -24,6 +28,7 @@ import org.telegram.telegrambots.meta.api.objects.File;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.User;
+import org.telegram.telegrambots.meta.api.objects.chat.Chat;
 import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
@@ -89,17 +94,27 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
 //            throw new RuntimeException(e);
 //        }
 
+
+
         User from = update.hasMessage()
                 ? update.getMessage().getFrom()
                 : update.getCallbackQuery().getFrom();
 
-        //
         Set<String> allowed = Set.of("reanimatthew", "hehekge");
         String adminNickname = from.getUserName();
         if (adminNickname == null || !allowed.contains(adminNickname.toLowerCase())) {
             System.out.println("Попытка незарегистрированного входа. Пользователь: " + from.getUserName() + ", ID: " + from.getId());
             // просто выходим — дальше ваш код не выполнится
             return;
+        }
+
+        // сохраняем chatId приватного чата
+        if (update.hasMessage()) {
+            Chat chat = update.getMessage().getChat();
+            if (!chat.isSuperGroupChat()) {
+                String nickname = update.getMessage().getFrom().getUserName();
+                adminBotService.saveChatId(nickname, chat.getId());
+            }
         }
 
         // TODO перенести в UpdateSqlTelegramBot
@@ -165,10 +180,10 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                     InlineKeyboardMarkup markup = menuBuilder.getAdmin(update);
                     EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Добавить или удалить администратора");
                     safeExecute(editMessage);
-                } else if ("DELETE-USER".equals(data)) {
-                    ctx.menuState = MenuState.DELETE_USER;
-                    InlineKeyboardMarkup markup = menuBuilder.getDeleteUser(update);
-                    EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Введите никнейм пользователя для удаления:");
+                } else if ("BAN-USER".equals(data)) {
+                    ctx.menuState = MenuState.BAN_USER;
+                    InlineKeyboardMarkup markup = menuBuilder.getBanUser(update);
+                    EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Введите никнейм пользователя для блокировки:");
                     safeExecute(editMessage);
                 }
             }
@@ -375,7 +390,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                 }
             }
 
-            case DELETE_USER -> {
+            case BAN_USER -> {
                 String nickname;
                 if (!text.isEmpty()) {
                     nickname = text.trim();
@@ -383,16 +398,16 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                         nickname = text.substring(1);
                     }
 
-                    if (adminBotService.deleteUser(nickname)) {
-                        clearMenu(update, ctx.lastMessageId, "Пользователь " + nickname + " удалён");
+                    if (adminBotService.banUser(nickname)) {
+                        clearMenu(update, ctx.lastMessageId, "Пользователь " + nickname + " заблокирован");
                     } else {
-                        ctx.menuState = MenuState.DELETE_USER;
-                        InlineKeyboardMarkup markup = menuBuilder.getDeleteUser(update);
+                        ctx.menuState = MenuState.BAN_USER;
+                        InlineKeyboardMarkup markup = menuBuilder.getBanUser(update);
                         SendMessage sendMessage = messageBuilder.createMessage(update, markup, "Нет такого пользователя.\nВведите никнейм пользователя для удаления:");
                         ctx.lastMessageId = safeExecute(sendMessage).getMessageId();
                     }
                 } else {
-                    InlineKeyboardMarkup markup = menuBuilder.getDeleteUser(update);
+                    InlineKeyboardMarkup markup = menuBuilder.getBanUser(update);
                     SendMessage sendMessage = messageBuilder.createMessage(update, markup, "Пустой никнейм.\nВведите никнейм пользователя для удаления:");
                     ctx.lastMessageId = safeExecute(sendMessage).getMessageId();
                 }
@@ -434,7 +449,6 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
         safeExecute(editMessage);
     }
 
-
     private void uploadContentConfirmation(String description, UploadDetails uploadDetails, Update update, Integer lastMessageId) {
         String trimedDescription;
         if (description.length() > 10) {
@@ -445,6 +459,8 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
         String upload = "Загружен контент: " + uploadDetails.getFileType() + ", описание: " + trimedDescription;
         clearMenu(update, lastMessageId, upload);
     }
+
+
 
     @Override
     public String getBotToken() {

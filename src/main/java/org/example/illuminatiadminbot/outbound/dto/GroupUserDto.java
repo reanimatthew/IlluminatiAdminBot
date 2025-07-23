@@ -19,4 +19,5 @@ public class GroupUserDto {
     String subscriptionType;
     int subscriptionDuration;
     LocalDate subscriptionExpiration;
+    String status;
 }
