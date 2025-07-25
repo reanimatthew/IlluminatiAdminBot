@@ -2,6 +2,7 @@ package org.example.illuminatiadminbot.inbound;
 
 // TODO бот для обновления БД пользователей и админов. Сделать с помощью MTProto.
 
+import lombok.extern.slf4j.Slf4j;
 import org.example.illuminatiadminbot.inbound.model.UserStatus;
 import org.example.illuminatiadminbot.mapper.GroupUserMapper;
 import org.example.illuminatiadminbot.outbound.model.GroupUser;
@@ -16,29 +17,29 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Component
 public class ControlTelegramBot {
 
     private final AdminBotService adminBotService;
     private final SupergroupService supergroupService;
-    private final GroupUserMapper groupUserMapper;
     private final TelegramGateway telegramGateway;
 
     public ControlTelegramBot(AdminBotService adminBotService, SupergroupService supergroupService, GroupUserMapper groupUserMapper, TelegramGateway telegramGateway) {
         this.adminBotService = adminBotService;
         this.supergroupService = supergroupService;
-        this.groupUserMapper = groupUserMapper;
         this.telegramGateway = telegramGateway;
     }
 
     @Scheduled(fixedRate = 1000 * 60 * 60)
     public void showDailyReport() {
+        String messageForAdmins = scanAndCorrect();
         List<Long> allAdminsChatId = adminBotService.getAllAdminsChatId();
         if (allAdminsChatId.isEmpty()) {
             return;
         }
 
-        String messageForAdmins = scanAndCorrect();
+        log.info("showDailyReport started");
         for (Long chatId : allAdminsChatId) {
             SendMessage sendMessage = SendMessage.builder()
                     .chatId(chatId)
@@ -126,9 +127,9 @@ public class ControlTelegramBot {
 
         // проверяем истекающие подписки
         LocalDate now = LocalDate.now();
-        LocalDate treshold = LocalDate.now().plusDays(3);
+        LocalDate threshold = LocalDate.now().plusDays(3);
         StringBuilder expiringSubscription = new StringBuilder("Подписка истекает:\n");
-        Boolean expiringSubscriptionIsExist = false;
+        boolean expiringSubscriptionIsExist = false;
 
         for (GroupUser groupUser : adminBotService.getAllUsers()) {
             if (groupUser.getStatus().equals(UserStatus.BANNED.toString()))
@@ -140,7 +141,7 @@ public class ControlTelegramBot {
                 continue;
             }
 
-            if (groupUser.getSubscriptionExpiration().isBefore(treshold)) {
+            if (groupUser.getSubscriptionExpiration().isBefore(threshold)) {
                 expiringSubscriptionIsExist = true;
                 expiringSubscription.append("id: ")
                         .append(groupUser.getTelegramId())

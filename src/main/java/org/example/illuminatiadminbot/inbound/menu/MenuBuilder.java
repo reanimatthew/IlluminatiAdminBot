@@ -11,10 +11,6 @@ public class MenuBuilder {
 
     public InlineKeyboardMarkup getMain(Update update) {
 
-        String chatId = update.hasMessage()
-                ? update.getMessage().getChatId().toString()
-                : update.getCallbackQuery().getMessage().getChatId().toString();
-
         InlineKeyboardButton btn1 = InlineKeyboardButton.builder()
                 .text("Подписка")
                 .callbackData("SUBSCRIPTION")
@@ -27,7 +23,7 @@ public class MenuBuilder {
 
         InlineKeyboardButton btn3 = InlineKeyboardButton.builder()
                 .text("Администраторы")
-                .callbackData("ADMIN")
+                .callbackData("ADMIN-ADD-REMOVE")
                 .build();
 
         InlineKeyboardButton btn4 = InlineKeyboardButton.builder()
@@ -43,10 +39,6 @@ public class MenuBuilder {
     }
 
     public InlineKeyboardMarkup getSubscription(Update update) {
-
-        String chatId = update.hasMessage()
-                ? update.getMessage().getChatId().toString()
-                : update.getCallbackQuery().getMessage().getChatId().toString();
 
         InlineKeyboardButton btn1 = InlineKeyboardButton.builder()
                 .text("Basic")
@@ -78,10 +70,6 @@ public class MenuBuilder {
     }
 
     public InlineKeyboardMarkup getDuration(Update update) {
-
-        String chatId = update.hasMessage()
-                ? update.getMessage().getChatId().toString()
-                : update.getCallbackQuery().getMessage().getChatId().toString();
 
         InlineKeyboardButton btn1 = InlineKeyboardButton.builder()
                 .text("1 мес.")
@@ -118,9 +106,6 @@ public class MenuBuilder {
     }
 
     public InlineKeyboardMarkup getNickname(Update update) {
-        String chatId = update.hasMessage()
-                ? update.getMessage().getChatId().toString()
-                : update.getCallbackQuery().getMessage().getChatId().toString();
 
         InlineKeyboardButton btn1 = InlineKeyboardButton.builder()
                 .text("← Назад")
@@ -135,10 +120,6 @@ public class MenuBuilder {
     }
 
     public InlineKeyboardMarkup getTheme(Update update) {
-
-        String chatId = update.hasMessage()
-                ? update.getMessage().getChatId().toString()
-                : update.getCallbackQuery().getMessage().getChatId().toString();
 
         InlineKeyboardButton btn1 = InlineKeyboardButton.builder()
                 .text(ThemeState.STRENGTH.getDisplayName())
@@ -176,10 +157,6 @@ public class MenuBuilder {
 
     public InlineKeyboardMarkup getUpload(Update update) {
 
-        String chatId = update.hasMessage()
-                ? update.getMessage().getChatId().toString()
-                : update.getCallbackQuery().getMessage().getChatId().toString();
-
         InlineKeyboardButton btn1 = InlineKeyboardButton.builder()
                 .text("Текст")
                 .callbackData("TEXT")
@@ -210,9 +187,6 @@ public class MenuBuilder {
     }
 
     public InlineKeyboardMarkup getFile(Update update) {
-        String chatId = update.hasMessage()
-                ? update.getMessage().getChatId().toString()
-                : update.getCallbackQuery().getMessage().getChatId().toString();
 
         InlineKeyboardButton btn1 = InlineKeyboardButton.builder()
                 .text("← Назад")
@@ -227,9 +201,6 @@ public class MenuBuilder {
     }
 
     public InlineKeyboardMarkup getDescription(Update update) {
-        String chatId = update.hasMessage()
-                ? update.getMessage().getChatId().toString()
-                : update.getCallbackQuery().getMessage().getChatId().toString();
 
         InlineKeyboardButton btn1 = InlineKeyboardButton.builder()
                 .text("← Назад")
@@ -244,9 +215,6 @@ public class MenuBuilder {
     }
 
     public InlineKeyboardMarkup getAdmin(Update update) {
-        String chatId = update.hasMessage()
-                ? update.getMessage().getChatId().toString()
-                : update.getCallbackQuery().getMessage().getChatId().toString();
 
         InlineKeyboardButton btn1 = InlineKeyboardButton.builder()
                 .text("Добавить администратора")
@@ -274,9 +242,6 @@ public class MenuBuilder {
     }
 
     public InlineKeyboardMarkup getAppointment(Update update) {
-        String chatId = update.hasMessage()
-                ? update.getMessage().getChatId().toString()
-                : update.getCallbackQuery().getMessage().getChatId().toString();
 
         InlineKeyboardButton btn1 = InlineKeyboardButton.builder()
                 .text("← Назад")
@@ -291,13 +256,24 @@ public class MenuBuilder {
     }
 
     public InlineKeyboardMarkup getBanUser(Update update) {
-        String chatId = update.hasMessage()
-                ? update.getMessage().getChatId().toString()
-                : update.getCallbackQuery().getMessage().getChatId().toString();
 
         InlineKeyboardButton btn1 = InlineKeyboardButton.builder()
                 .text("← Назад")
                 .callbackData("BACK-TO-MAIN")
+                .build();
+
+        InlineKeyboardRow row1 = new InlineKeyboardRow(btn1);
+
+        return InlineKeyboardMarkup.builder()
+                .keyboardRow(row1)
+                .build();
+    }
+
+    public InlineKeyboardMarkup getDismissal(Update update) {
+
+        InlineKeyboardButton btn1 = InlineKeyboardButton.builder()
+                .text("← Назад")
+                .callbackData("BACK-TO-ADMIN")
                 .build();
 
         InlineKeyboardRow row1 = new InlineKeyboardRow(btn1);

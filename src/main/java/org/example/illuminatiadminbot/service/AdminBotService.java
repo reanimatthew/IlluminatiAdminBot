@@ -80,12 +80,8 @@ public class AdminBotService {
         return "Подписчик: " + nickname + ", подписка: " + subscriptionDetails.get(0) + ", срок: " + subscribeDuration + " мес., до: " + expirationDate;
     }
 
-    public String adminShow(String addOrRemove) {
-        String head = addOrRemove.equals("ADD") ? "Добавление администратора\n" : "Удаление администратора\n";
-        if (addOrRemove.equals("ADD")) {
-
-        }
-        return head + "Список активных администраторов:\n@zaychik, id: 123456\n@belocka, id: 987654\nВведите id администратора";
+    public List<GroupUser> adminShow() {
+        return groupUserRepository.findAllByRole("admin");
     }
 
     public String loadUsers() {
@@ -138,6 +134,11 @@ public class AdminBotService {
             groupUserRepository.saveAll(realGroupUsers);
     }
 
+    public String getAllAdmins() {
+        List<GroupUser> admins = groupUserRepository.findAllByRole("admin");
+        return "Существующие администраторы:\n" + admins.stream().map(GroupUser::getNickname).collect(Collectors.joining("\n"));
+    }
+
     public List<Long> getAllAdminsChatId() {
         List<GroupUser> admins = groupUserRepository.findAllByRoleAndChatIdIsNotNull("admin");
         return admins.stream().map(GroupUser::getChatId).collect(Collectors.toList());
@@ -150,5 +151,9 @@ public class AdminBotService {
             groupUser.setChatId(ChatId);
             groupUserRepository.save(groupUser);
         }
+    }
+
+    public void saveGroupUser(GroupUser groupAdmin) {
+        groupUserRepository.save(groupAdmin);
     }
 }
