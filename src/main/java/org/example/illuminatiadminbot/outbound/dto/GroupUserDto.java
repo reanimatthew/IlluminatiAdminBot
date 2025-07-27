@@ -1,6 +1,5 @@
 package org.example.illuminatiadminbot.outbound.dto;
 
-import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
@@ -15,7 +14,7 @@ public class GroupUserDto {
     private Long id;
     Long telegramId;
     String nickname;
-    String role;
+    String telegramUserStatus;
     String subscriptionType;
     int subscriptionDuration;
     LocalDate subscriptionExpiration;

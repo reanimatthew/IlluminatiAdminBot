@@ -245,7 +245,7 @@ public class MenuBuilder {
 
         InlineKeyboardButton btn1 = InlineKeyboardButton.builder()
                 .text("← Назад")
-                .callbackData("BACK-TO-ADMIN")
+                .callbackData("BACK-TO-ADMIN-ADD-REMOVE")
                 .build();
 
         InlineKeyboardRow row1 = new InlineKeyboardRow(btn1);
@@ -273,7 +273,7 @@ public class MenuBuilder {
 
         InlineKeyboardButton btn1 = InlineKeyboardButton.builder()
                 .text("← Назад")
-                .callbackData("BACK-TO-ADMIN")
+                .callbackData("BACK-TO-ADMIN-ADD-REMOVE")
                 .build();
 
         InlineKeyboardRow row1 = new InlineKeyboardRow(btn1);

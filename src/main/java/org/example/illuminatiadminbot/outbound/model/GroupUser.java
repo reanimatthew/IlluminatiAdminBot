@@ -26,7 +26,7 @@ public class GroupUser {
     String nickname;
 
     @Column
-    String role;
+    String telegramUserStatus;
 
     @Column
     String subscriptionType;

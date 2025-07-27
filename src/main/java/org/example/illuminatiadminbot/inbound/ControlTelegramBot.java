@@ -25,7 +25,7 @@ public class ControlTelegramBot {
     private final SupergroupService supergroupService;
     private final TelegramGateway telegramGateway;
 
-    public ControlTelegramBot(AdminBotService adminBotService, SupergroupService supergroupService, GroupUserMapper groupUserMapper, TelegramGateway telegramGateway) {
+    public ControlTelegramBot(AdminBotService adminBotService, SupergroupService supergroupService, TelegramGateway telegramGateway) {
         this.adminBotService = adminBotService;
         this.supergroupService = supergroupService;
         this.telegramGateway = telegramGateway;

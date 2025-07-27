@@ -4,6 +4,7 @@ import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.example.illuminatiadminbot.configuration.TopicProperties;
 import org.example.illuminatiadminbot.inbound.menu.*;
+import org.example.illuminatiadminbot.inbound.model.TelegramUserStatus;
 import org.example.illuminatiadminbot.inbound.model.UploadDetails;
 import org.example.illuminatiadminbot.inbound.model.UserStatus;
 import org.example.illuminatiadminbot.outbound.model.GroupUser;
@@ -126,7 +127,6 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                 ctx.subscriptionDetails.set(0, "");
                 ctx.subscriptionDetails.set(1, "");
                 ctx.uploadDetails.clearUploadDetails();
-                ctx.adminStatus = "";
                 ctx.menuState = MenuState.MAIN_MENU;
                 InlineKeyboardMarkup markup = menuBuilder.getMain(update);
                 SendMessage menuMessage = messageBuilder.createMessage(update, markup, "Выберите действие:");
@@ -156,13 +156,12 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                     EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Выберите топик:");
                     safeExecute(editMessage);
                 } else if ("ADMIN-ADD-REMOVE".equals(data)) {
-                    ctx.adminStatus = "";
                     ctx.menuState = MenuState.ADMIN_MENU;
                     InlineKeyboardMarkup markup = menuBuilder.getAdmin(update);
                     EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Добавить или удалить администратора");
                     safeExecute(editMessage);
                 } else if ("BAN-USER".equals(data)) {
-                    ctx.menuState = MenuState.BAN_USER;
+                    ctx.menuState = MenuState.BAN_MENU;
                     InlineKeyboardMarkup markup = menuBuilder.getBanUser(update);
                     EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Введите никнейм пользователя для блокировки:");
                     safeExecute(editMessage);
@@ -327,18 +326,16 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
 
             case ADMIN_MENU -> {
                 if ("ADD".equals(data)) {
-                    ctx.adminStatus = data;
                     ctx.menuState = MenuState.APPOINTMENT_MENU;
                     InlineKeyboardMarkup markup = menuBuilder.getAppointment(update);
-                    EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, adminShow(ctx.adminStatus));
+                    EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, adminShow(data));
                     safeExecute(editMessage);
                 } else if ("REMOVE".equals(data)) {
-                    ctx.menuState = MenuState.BAN_USER;
-                    InlineKeyboardMarkup markup = menuBuilder.getBanUser(update);
-                    EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Введите никнейм пользователя для блокировки:");
+                    ctx.menuState = MenuState.DISMISSAL_MENU;
+                    InlineKeyboardMarkup markup = menuBuilder.getDismissal(update);
+                    EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, adminShow(data));
                     safeExecute(editMessage);
                 } else if ("BACK-TO-MAIN".equals(data)) {
-                    ctx.adminStatus = "";
                     ctx.menuState = MenuState.MAIN_MENU;
                     InlineKeyboardMarkup markup = menuBuilder.getMain(update);
                     EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Выберите действие:");
@@ -353,12 +350,12 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                         GroupUser groupAdmin = supergroupService.addUserToSupergroup(phone);
                         if (groupAdmin != null) {
                             promoteToAdmin(groupAdmin.getTelegramId());
-                            groupAdmin.setRole("administrator");
-                            groupAdmin.setStatus(UserStatus.ACTIVE.toString());
                             groupAdmin.setSubscriptionType(Subscription.ADMIN.name());
                             groupAdmin.setSubscriptionDuration(5 * 12);
                             groupAdmin.setSubscriptionExpiration(LocalDate.now().plusYears(5));
                             adminBotService.saveGroupUser(groupAdmin);
+                            String message = "Администратор: " + groupAdmin.getNickname() + ", Telegram Id: " + groupAdmin.getTelegramId() + ", добавлен.";
+                            clearMenu(update, ctx.lastMessageId, message);
                         } else {
                             deleteMenu(update, ctx.lastMessageId);
                             ctx.menuState = MenuState.APPOINTMENT_MENU;
@@ -373,11 +370,15 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                         SendMessage sendMessage = messageBuilder.createMessage(update, markup, "Неправильный номер.\nВведите номер телефона аккаунта нового администратора в формате +79261234567");
                         ctx.lastMessageId = safeExecute(sendMessage).getMessageId();
                     }
+                } else if ("BACK-TO-ADMIN-ADD-REMOVE".equals(data)) {
+                    ctx.menuState = MenuState.ADMIN_MENU;
+                    InlineKeyboardMarkup markup = menuBuilder.getAdmin(update);
+                    EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Добавить или удалить администратора");
+                    safeExecute(editMessage);
                 }
-
             }
 
-            case BAN_USER -> {
+            case DISMISSAL_MENU -> {
                 String nickname;
                 if (!text.isEmpty()) {
                     nickname = text.trim();
@@ -385,18 +386,44 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                         nickname = text.substring(1);
                     }
 
-                    if (supergroupService.banUser(nickname) || adminBotService.banUser(nickname) ) {
+                    if (supergroupService.banUser(nickname) && adminBotService.banUser(nickname) ) {
+                        clearMenu(update, ctx.lastMessageId, "Администратор " + nickname + " удалён");
+                    } else {
+                        ctx.menuState = MenuState.DISMISSAL_MENU;
+                        InlineKeyboardMarkup markup = menuBuilder.getDismissal(update);
+                        SendMessage sendMessage = messageBuilder.createMessage(update, markup, "Нет такого nickname.\nВведите никнейм пользователя для удаления:");
+                        ctx.lastMessageId = safeExecute(sendMessage).getMessageId();
+                    }
+                } else if ("BACK-TO-ADMIN-ADD-REMOVE".equals(data)) {
+                    ctx.menuState = MenuState.ADMIN_MENU;
+                    InlineKeyboardMarkup markup = menuBuilder.getAdmin(update);
+                    EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Добавить или удалить администратора");
+                    safeExecute(editMessage);
+                }
+            }
+
+            case BAN_MENU -> {
+                String nickname;
+                if (!text.isEmpty()) {
+                    nickname = text.trim();
+                    if (text.startsWith("@")) {
+                        nickname = text.substring(1);
+                    }
+
+                    if (supergroupService.banUser(nickname) && adminBotService.banUser(nickname) ) {
                         clearMenu(update, ctx.lastMessageId, "Пользователь " + nickname + " заблокирован");
                     } else {
-                        ctx.menuState = MenuState.BAN_USER;
+                        ctx.menuState = MenuState.BAN_MENU;
                         InlineKeyboardMarkup markup = menuBuilder.getBanUser(update);
                         SendMessage sendMessage = messageBuilder.createMessage(update, markup, "Нет такого пользователя.\nВведите никнейм пользователя для удаления:");
                         ctx.lastMessageId = safeExecute(sendMessage).getMessageId();
                     }
-                } else {
-                    InlineKeyboardMarkup markup = menuBuilder.getBanUser(update);
-                    SendMessage sendMessage = messageBuilder.createMessage(update, markup, "Пустой никнейм.\nВведите никнейм пользователя для удаления:");
-                    ctx.lastMessageId = safeExecute(sendMessage).getMessageId();
+                } else if ("BACK-TO-MAIN".equals(data)) {
+
+                    ctx.menuState = MenuState.MAIN_MENU;
+                    InlineKeyboardMarkup markup = menuBuilder.getMain(update);
+                    EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Выберите действие:");
+                    safeExecute(editMessage);
                 }
             }
         }
@@ -423,7 +450,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                 .userId(userId)
                 .build();
         ChatMember chatMember = telegramGateway.safeExecute(getChatMember);
-        return "administrator".equals(chatMember.getStatus()) || "creator".equals(chatMember.getStatus());
+        return TelegramUserStatus.ADMINISTRATOR.name().equalsIgnoreCase(chatMember.getStatus()) || TelegramUserStatus.CREATOR.name().equalsIgnoreCase(chatMember.getStatus());
     }
 
     private Message safeExecute(SendMessage menuMessage) {
@@ -487,18 +514,21 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
     }
 
     public String adminShow(String addOrRemove) {
-        String result = addOrRemove.equals("ADD") ? "Добавление администратора\n" : "Удаление администратора\n";
+        String result = addOrRemove.equals("ADD") ? "Добавление администратора\n\n" : "Удаление администратора\n\n";
         List<GroupUser> admins = adminBotService.adminShow();
         String adminNickname;
         if (admins.isEmpty()) {
             adminNickname = "В БД нет администраторов.\n";
         } else {
-            adminNickname = admins.stream().map(GroupUser::getNickname).collect(Collectors.joining("\n"));
+            adminNickname = admins.stream()
+                    .filter(groupUser -> groupUser.getStatus().equalsIgnoreCase(UserStatus.ACTIVE.name()))
+                    .map(GroupUser::getNickname)
+                    .collect(Collectors.joining("\n"));
         }
-        result += "Существующие администраторы:\n" + adminNickname;
+        result += "Существующие администраторы:\n" + adminNickname + "\n\n";
         return addOrRemove.equals("ADD")
                 ? result + "Введите номер телефона аккаунта нового администратора в формате +79261234567"
-                : result + "Введите id удаляемого администратора";
+                : result + "Введите nickname удаляемого администратора";
     }
 
     @Override
@@ -515,7 +545,6 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
     public static class ConversationContext {
         private final ArrayList<String> subscriptionDetails = new ArrayList<>(List.of("", ""));
         private UploadDetails uploadDetails = new UploadDetails();
-        private String adminStatus = "";
         private MenuState menuState = MenuState.MAIN_MENU;
         private Integer lastMessageId = null;
     }

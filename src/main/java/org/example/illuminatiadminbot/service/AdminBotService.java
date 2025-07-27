@@ -1,6 +1,7 @@
 package org.example.illuminatiadminbot.service;
 
 import lombok.AllArgsConstructor;
+import org.example.illuminatiadminbot.inbound.model.TelegramUserStatus;
 import org.example.illuminatiadminbot.inbound.model.UploadDetails;
 import org.example.illuminatiadminbot.inbound.model.UserStatus;
 import org.example.illuminatiadminbot.outbound.model.GroupUser;
@@ -30,29 +31,6 @@ public class AdminBotService {
     private final MinioFileDetailRepository minioFileDetailRepository;
 
     @Transactional
-    public String adminAddOrRemove(Long adminTelegramId, String adminAction) {
-        String nickname = "@nickname:" + adminTelegramId.toString();
-        LocalDate expirationDate = LocalDate.now().plusDays(3000);
-        if (adminAction.equals("ADD")) {
-            GroupUser groupUser = GroupUser.builder()
-                    .telegramId(adminTelegramId)
-                    .nickname(nickname)
-                    .role("admin")
-                    .subscriptionType("Admin")
-                    .subscriptionDuration(3000)
-                    .subscriptionExpiration(expirationDate)
-                    .build();
-            groupUserRepository.save(groupUser);
-            return "Администратор c id: " + adminTelegramId + " и nickname: " + nickname + " добавлен";
-        } else if (adminAction.equals("REMOVE")) {
-            groupUserRepository.deleteByTelegramId(adminTelegramId);
-            return "Администратор c id: " + adminTelegramId + " и nickname: " + nickname + " удалён";
-        } else {
-            return "В ответе нет ни ADD, ни REMOVE";
-        }
-    }
-
-    @Transactional
     public String subscribeUser(String nickname, ArrayList<String> subscriptionDetails) {
         String subscriptionType = subscriptionDetails.get(0);
         String numOfMonth = subscriptionDetails.get(1);
@@ -67,7 +45,7 @@ public class AdminBotService {
                     .subscriptionType(subscriptionType)
                     .subscriptionDuration(subscribeDuration)
                     .subscriptionExpiration(expirationDate)
-                    .role("subscriber")
+                    .telegramUserStatus(TelegramUserStatus.MEMBER.name())
                     .build();
             groupUserRepository.save(groupUser);
         } else {
@@ -81,7 +59,7 @@ public class AdminBotService {
     }
 
     public List<GroupUser> adminShow() {
-        return groupUserRepository.findAllByRole("admin");
+        return groupUserRepository.findAllByTelegramUserStatus(TelegramUserStatus.ADMINISTRATOR.name());
     }
 
     public String loadUsers() {
@@ -135,12 +113,12 @@ public class AdminBotService {
     }
 
     public String getAllAdmins() {
-        List<GroupUser> admins = groupUserRepository.findAllByRole("admin");
+        List<GroupUser> admins = groupUserRepository.findAllByTelegramUserStatus("admin");
         return "Существующие администраторы:\n" + admins.stream().map(GroupUser::getNickname).collect(Collectors.joining("\n"));
     }
 
     public List<Long> getAllAdminsChatId() {
-        List<GroupUser> admins = groupUserRepository.findAllByRoleAndChatIdIsNotNull("admin");
+        List<GroupUser> admins = groupUserRepository.findAllByTelegramUserStatusAndChatIdIsNotNull("admin");
         return admins.stream().map(GroupUser::getChatId).collect(Collectors.toList());
     }
 

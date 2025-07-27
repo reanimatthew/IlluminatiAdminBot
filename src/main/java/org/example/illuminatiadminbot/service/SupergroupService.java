@@ -4,11 +4,14 @@ import it.tdlight.client.SimpleTelegramClient;
 import it.tdlight.jni.TdApi;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.illuminatiadminbot.inbound.model.TelegramUserStatus;
+import org.example.illuminatiadminbot.inbound.model.UserStatus;
 import org.example.illuminatiadminbot.mapper.GroupUserMapper;
 import org.example.illuminatiadminbot.outbound.model.GroupUser;
 import org.example.illuminatiadminbot.outbound.repository.GroupUserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -22,7 +25,6 @@ import java.util.concurrent.TimeoutException;
 public class SupergroupService {
 
     private final SimpleTelegramClient simpleTelegramClient;
-    private final GroupUserMapper groupUserMapper;
     private final GroupUserRepository groupUserRepository;
 
     @Value("${supergroup.id}")
@@ -82,6 +84,7 @@ public class SupergroupService {
         return existingUsers;
     }
 
+    @Transactional
     public GroupUser addUserToSupergroup(String phone) {
         TdApi.Contact contact = new TdApi.Contact(
                 phone,
@@ -99,12 +102,17 @@ public class SupergroupService {
             throw new RuntimeException(e);
         }
 
+        log.info(imported.toString());
+
         long userId = imported.userIds[0];
         if (userId == 0L)
             return null;
 
-        if (getAllAdminIds().contains(userId))
-            return groupUserRepository.findByTelegramId(userId);
+        if (getAllAdminIdsFromSupergroup().contains(userId)) {
+            Optional<GroupUser> groupUserOptional = groupUserRepository.findByTelegramId(userId);
+            GroupUser groupUser = groupUserOptional.orElseGet(() -> getGroupUserById(userId, TelegramUserStatus.ADMINISTRATOR.name()));
+            return groupUserRepository.save(groupUser);
+        }
 
         long supergroupIdLong = Long.parseLong("-100" + supergroupId);
         TdApi.AddChatMember inviteRequest = new TdApi.AddChatMember(
@@ -119,7 +127,7 @@ public class SupergroupService {
             throw new RuntimeException(e);
         }
 
-        GroupUser groupUser = getGroupUserById(userId);
+        GroupUser groupUser = getGroupUserById(userId, TelegramUserStatus.ADMINISTRATOR.name());
 
         TdApi.RemoveContacts removeRequest = new TdApi.RemoveContacts(new long[]{userId});
 
@@ -133,7 +141,7 @@ public class SupergroupService {
         return groupUser;
     }
 
-    private List<Long> getAllAdminIds() {
+    private List<Long> getAllAdminIdsFromSupergroup() {
 
         List<Long> adminIds = new ArrayList<>();
 
@@ -172,7 +180,17 @@ public class SupergroupService {
         return adminIds;
     }
 
-    public GroupUser getGroupUserById(long userId) {
+    public GroupUser getGroupUserById(long userId, String telegramUserStatus) {
+
+        // проверяем, есть ли такой пользователь в БД
+        Optional<GroupUser> groupUserOptional = groupUserRepository.findByTelegramId(userId);
+        if (groupUserOptional.isPresent()) {
+            GroupUser groupUser = groupUserOptional.get();
+            groupUser.setStatus(UserStatus.ACTIVE.name());
+            groupUser.setTelegramUserStatus(telegramUserStatus);
+            return groupUser;
+        }
+
         TdApi.User user;
 
         try {
@@ -189,8 +207,8 @@ public class SupergroupService {
         return GroupUser.builder()
                 .telegramId(userId)
                 .nickname(nickname)
-                .role("member")
-                .status("active")
+                .telegramUserStatus(telegramUserStatus)
+                .status(UserStatus.ACTIVE.name())
                 .build();
     }
 
@@ -200,7 +218,10 @@ public class SupergroupService {
                 .filter(e -> Objects.equals(e.getValue(), nickname))
                 .map(Map.Entry::getKey)
                 .findFirst()
-                .orElseThrow(() -> new NoSuchElementException("SupergroupService.banUser: нет пользователя с ником: " + nickname));
+                .orElse(null);
+
+        if (userId == null)
+            return false;
 
         TdApi.BanChatMember banRequest = new TdApi.BanChatMember(
                 Long.parseLong("-100" + supergroupId),
