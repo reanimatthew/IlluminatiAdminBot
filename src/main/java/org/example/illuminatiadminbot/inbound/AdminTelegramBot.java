@@ -1,6 +1,7 @@
 package org.example.illuminatiadminbot.inbound;
 
 import lombok.Data;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.illuminatiadminbot.configuration.TopicProperties;
 import org.example.illuminatiadminbot.inbound.menu.*;
@@ -43,6 +44,7 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingleThreadUpdateConsumer {
 
     private final TelegramClient telegramClient;
@@ -62,16 +64,8 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
     @Value("${supergroup.id}")
     private Long supergroupId;
 
-    public AdminTelegramBot(TelegramClient telegramClient, MenuBuilder menuBuilder, MessageBuilder messageBuilder, AdminBotService adminBotService, TopicProperties topicProperties, PhoneValidatorAndNormalizer phoneValidatorAndNormalizer, TelegramGateway tg, SupergroupService supergroupService1, TelegramGateway telegramGateway) {
-        this.telegramClient = telegramClient;
-        this.menuBuilder = menuBuilder;
-        this.messageBuilder = messageBuilder;
-        this.adminBotService = adminBotService;
-        this.topicProperties = topicProperties;
-        this.phoneValidatorAndNormalizer = phoneValidatorAndNormalizer;
-        this.supergroupService = supergroupService1;
-        this.telegramGateway = telegramGateway;
-    }
+    @Value("${chat.id}")
+    private Long chatId;
 
     @Override
     public void consume(Update update) {
@@ -105,7 +99,27 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
             if (update.getMessage().getText().equals("/initializeThisBeautifulBot")) {
                 String message = adminBotService.loadUsers();
                 SendMessage sendMessage = SendMessage.builder()
+                        .chatId(update.getMessage().getChatId())
                         .text(message)
+                        .build();
+                try {
+                    telegramClient.execute(sendMessage);
+                } catch (TelegramApiException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }
+
+        if (update.hasMessage() && update.getMessage().hasText()) {
+            if (update.getMessage().getText().equals("/showMeInfo")) {
+                List<GroupUser> groupUsersFromSupergroup = supergroupService.getAllGroupUsers();
+                StringBuilder stringBuilder = new StringBuilder();
+                for (GroupUser groupUserFromSupergroup : groupUsersFromSupergroup) {
+                    stringBuilder.append(groupUserFromSupergroup.toStringSupergroup()).append("\n");
+                }
+                SendMessage sendMessage =  SendMessage.builder()
+                        .chatId(update.getMessage().getChatId())
+                        .text(stringBuilder.toString())
                         .build();
                 try {
                     telegramClient.execute(sendMessage);
@@ -450,7 +464,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                 .userId(userId)
                 .build();
         ChatMember chatMember = telegramGateway.safeExecute(getChatMember);
-        return TelegramUserStatus.ADMINISTRATOR.name().equalsIgnoreCase(chatMember.getStatus()) || TelegramUserStatus.CREATOR.name().equalsIgnoreCase(chatMember.getStatus());
+        return TelegramUserStatus.is(chatMember.getStatus(), TelegramUserStatus.ADMINISTRATOR) || TelegramUserStatus.is(chatMember.getStatus(), TelegramUserStatus.CREATOR);
     }
 
     private Message safeExecute(SendMessage menuMessage) {

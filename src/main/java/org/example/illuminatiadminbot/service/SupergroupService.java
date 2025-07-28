@@ -6,7 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.illuminatiadminbot.inbound.model.TelegramUserStatus;
 import org.example.illuminatiadminbot.inbound.model.UserStatus;
-import org.example.illuminatiadminbot.mapper.GroupUserMapper;
+import org.example.illuminatiadminbot.mapper.ChatMemberStatusMapper;
 import org.example.illuminatiadminbot.outbound.model.GroupUser;
 import org.example.illuminatiadminbot.outbound.repository.GroupUserRepository;
 import org.springframework.beans.factory.annotation.Value;
@@ -18,6 +18,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -26,9 +27,13 @@ public class SupergroupService {
 
     private final SimpleTelegramClient simpleTelegramClient;
     private final GroupUserRepository groupUserRepository;
+    private final ChatMemberStatusMapper chatMemberStatusMapper;
 
     @Value("${supergroup.id}")
     private Long supergroupId;
+
+    @Value("${chat.id}")
+    private Long chatId;
 
     public Map<Long, String> getAllMembers() {
 
@@ -110,13 +115,12 @@ public class SupergroupService {
 
         if (getAllAdminIdsFromSupergroup().contains(userId)) {
             Optional<GroupUser> groupUserOptional = groupUserRepository.findByTelegramId(userId);
-            GroupUser groupUser = groupUserOptional.orElseGet(() -> getGroupUserById(userId, TelegramUserStatus.ADMINISTRATOR.name()));
+            GroupUser groupUser = groupUserOptional.orElseGet(() -> activateGroupUserById(userId, TelegramUserStatus.ADMINISTRATOR));
             return groupUserRepository.save(groupUser);
         }
 
-        long supergroupIdLong = Long.parseLong("-100" + supergroupId);
         TdApi.AddChatMember inviteRequest = new TdApi.AddChatMember(
-                supergroupIdLong,
+                chatId,
                 userId,
                 0
         );
@@ -127,7 +131,7 @@ public class SupergroupService {
             throw new RuntimeException(e);
         }
 
-        GroupUser groupUser = getGroupUserById(userId, TelegramUserStatus.ADMINISTRATOR.name());
+        GroupUser groupUser = activateGroupUserById(userId, TelegramUserStatus.ADMINISTRATOR);
 
         TdApi.RemoveContacts removeRequest = new TdApi.RemoveContacts(new long[]{userId});
 
@@ -180,7 +184,83 @@ public class SupergroupService {
         return adminIds;
     }
 
-    public GroupUser getGroupUserById(long userId, String telegramUserStatus) {
+    public GroupUser getGroupUserById(long userId) {
+
+        TdApi.User user;
+
+        try {
+            user = simpleTelegramClient.send(new TdApi.GetUser(userId)).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+
+        String nickname = "";
+        if (user.usernames != null && user.usernames.editableUsername != null) {
+            nickname = user.usernames.editableUsername;
+        }
+
+        TdApi.ChatMember chatMember;
+        try {
+            chatMember = simpleTelegramClient.send(
+                    new TdApi.GetChatMember(
+                            chatId,
+                            new TdApi.MessageSenderUser(userId)
+                    )
+            ).get();
+        } catch (ExecutionException | InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+
+        TelegramUserStatus telegramStatus = chatMemberStatusMapper.simplifyStatus(chatMember.status);
+
+        return GroupUser.builder()
+                .telegramId(userId)
+                .nickname(nickname)
+                .telegramUserStatus(chatMemberStatusMapper.simplifyStatus(chatMember.status))
+                .build();
+    }
+
+    public List<GroupUser> getAllGroupUsers() {
+        List<GroupUser> groupUsers = new ArrayList<>();
+        List<TdApi.ChatMember> allMembers = new ArrayList<>();
+        int offset = 0;
+        int limit = 200;
+        while (true) {
+            CompletableFuture<TdApi.ChatMembers> future = simpleTelegramClient.send(
+                    new TdApi.GetSupergroupMembers(
+                            supergroupId,
+                            new TdApi.SupergroupMembersFilterRecent(),
+                            offset,
+                            limit
+                    )
+            );
+
+            TdApi.ChatMembers chunk;
+            try {
+                chunk = future.get(30, TimeUnit.SECONDS);
+            } catch (InterruptedException | ExecutionException | TimeoutException e) {
+                throw new RuntimeException(e);
+            }
+
+            Collections.addAll(allMembers, chunk.members);
+            if (chunk.members.length < limit)
+                break;
+            offset += chunk.members.length;
+        }
+
+        GroupUser groupUser;
+        for (TdApi.ChatMember chatMember : allMembers) {
+            TdApi.MessageSenderUser messageSenderUser = (TdApi.MessageSenderUser) chatMember.memberId;
+            groupUser = getGroupUserById(messageSenderUser.userId);
+            groupUser.setStatus(UserStatus.ACTIVE.name());
+            groupUser.setTelegramUserStatus(chatMemberStatusMapper.simplifyStatus(chatMember.status));
+            groupUsers.add(groupUser);
+        }
+
+        return groupUsers;
+    }
+
+    public GroupUser activateGroupUserById(long userId, TelegramUserStatus telegramUserStatus) {
 
         // проверяем, есть ли такой пользователь в БД
         Optional<GroupUser> groupUserOptional = groupUserRepository.findByTelegramId(userId);
@@ -224,7 +304,7 @@ public class SupergroupService {
             return false;
 
         TdApi.BanChatMember banRequest = new TdApi.BanChatMember(
-                Long.parseLong("-100" + supergroupId),
+                chatId,
                 new TdApi.MessageSenderUser(userId),
                 0,
                 true
@@ -237,5 +317,33 @@ public class SupergroupService {
         }
 
         return true;
+    }
+
+    public List<GroupUser> findGroupUsersNotInSql() {
+
+        List<GroupUser> fromSupergroup = getAllGroupUsers();
+        Set<Long> telegramIdsFromSql = groupUserRepository.findAll()
+                .stream()
+                .map(GroupUser::getTelegramId)
+                .collect(Collectors.toSet());
+
+        return fromSupergroup.stream()
+                .filter(groupUser -> !telegramIdsFromSql.contains(groupUser.getTelegramId()))
+                .toList();
+    }
+
+    public List<GroupUser> findGroupUsersNotInSupergroup() {
+
+        List<GroupUser> fromSql = groupUserRepository.findAll();
+        Set<Long> telegramIdsFromSupergroup = getAllGroupUsers()
+                .stream()
+                .map(GroupUser::getTelegramId)
+                .collect(Collectors.toSet());
+
+        return fromSql
+                .stream()
+                .filter(groupUser -> !telegramIdsFromSupergroup.contains(groupUser.getTelegramId()))
+                .toList();
+
     }
 }

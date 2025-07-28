@@ -3,6 +3,8 @@ package org.example.illuminatiadminbot.inbound;
 // TODO бот для обновления БД пользователей и админов. Сделать с помощью MTProto.
 
 import lombok.extern.slf4j.Slf4j;
+import org.example.illuminatiadminbot.inbound.menu.Subscription;
+import org.example.illuminatiadminbot.inbound.model.TelegramUserStatus;
 import org.example.illuminatiadminbot.inbound.model.UserStatus;
 import org.example.illuminatiadminbot.mapper.GroupUserMapper;
 import org.example.illuminatiadminbot.outbound.model.GroupUser;
@@ -33,130 +35,184 @@ public class ControlTelegramBot {
 
     @Scheduled(fixedRate = 1000 * 60 * 60)
     public void showDailyReport() {
-        String messageForAdmins = scanAndCorrect();
-        List<Long> allAdminsChatId = adminBotService.getAllAdminsChatId();
-        if (allAdminsChatId.isEmpty()) {
-            return;
-        }
-
-        log.info("showDailyReport started");
-        for (Long chatId : allAdminsChatId) {
-            SendMessage sendMessage = SendMessage.builder()
-                    .chatId(chatId)
-                    .text(messageForAdmins)
-                    .build();
-            telegramGateway.safeExecute(sendMessage);
-        }
+        StringBuilder message = new StringBuilder(correctSql());
+        message.append(scanSupergroup());
+//        List<Long> allAdminsChatId = adminBotService.getAllAdminsChatId();
+//        if (allAdminsChatId.isEmpty()) {
+//            return;
+//        }
+//
+//        log.info("showDailyReport started");
+//        for (Long chatId : allAdminsChatId) {
+//            SendMessage sendMessage = SendMessage.builder()
+//                    .chatId(chatId)
+//                    .text(messageForAdmins)
+//                    .build();
+//            telegramGateway.safeExecute(sendMessage);
+//        }
     }
 
-    public String scanAndCorrect() {
+    public String correctSql() {
+        List<GroupUser> groupUsersNotInSql = supergroupService.findGroupUsersNotInSql();
 
-        StringBuilder result = new StringBuilder();
-
-        // Мапа реальных пользователей из супергруппы, ключ - TelegramId
-        SortedMap<Long, String> existingUsers = new TreeMap<>(supergroupService.getAllMembers());
-
-        // Мапа пользователей из SQL БД
-        SortedMap<Long, GroupUser> groupUsersMap = adminBotService.getAllUsers()
-                .stream()
-                .collect(
-                        Collectors.toMap(
-                                GroupUser::getId,
-                                Function.identity(),
-                                (firstUser, secondUser) -> firstUser,
-                                TreeMap::new));
-
-        SortedMap<Long, GroupUser> notInSupergroup = groupUsersMap.entrySet().stream()
-                .filter(e -> !existingUsers.containsKey(e.getKey()))
-                .collect(Collectors.toMap(
-                        Map.Entry::getKey,
-                        Map.Entry::getValue,
-                        (firstUser, secondUser) -> firstUser,
-                        TreeMap::new
-                ));
-
-        SortedMap<Long, String> notInSql = existingUsers.entrySet().stream()
-                .filter(e -> !groupUsersMap.containsKey(e.getKey()))
-                .collect(Collectors.toMap(
-                        Map.Entry::getKey,
-                        Map.Entry::getValue,
-                        (firstUser, secondUser) -> firstUser,
-                        TreeMap::new
-                ));
-
-        // проверяем соответствие nickname из супергруппы и из SQL, корректируем по необходимости
-        if (notInSql.isEmpty() && notInSupergroup.isEmpty()) {
-            List<GroupUser> realGroupUsers = new ArrayList<>();
-            GroupUser currentGroupUser;
-            for (Map.Entry<Long, String> entry : existingUsers.entrySet()) {
-                currentGroupUser = groupUsersMap.get(entry.getKey());
-                if (!currentGroupUser.getNickname().equals(entry.getValue())) {
-                    result.append("Юзер ")
-                            .append(currentGroupUser.getTelegramId())
-                            .append(" сменил nickname c ")
-                            .append(currentGroupUser.getNickname())
-                            .append(" на ")
-                            .append(entry.getValue())
-                            .append("\n");
-                    currentGroupUser.setNickname(entry.getValue());
-                }
-                result.append("---------\n");
-                realGroupUsers.add(currentGroupUser);
+        for (GroupUser groupUser : groupUsersNotInSql) {
+            if (groupUser.getTelegramUserStatus() == TelegramUserStatus.ADMINISTRATOR) {
+                groupUser.setSubscriptionType(Subscription.ADMIN.name());
+                groupUser.setSubscriptionDuration(5 * 12);
+                groupUser.setSubscriptionExpiration(LocalDate.now().plusYears(5));
             }
-            adminBotService.saveAll(realGroupUsers);
-        } else if (notInSupergroup.isEmpty()) {
-            result.append("Есть в супергруппе, но нет в БД. Проверить подписки:\n");
-            for (Map.Entry<Long, String> entry : notInSql.entrySet()) {
-                result.append("id: ")
-                        .append(entry.getKey())
-                        .append(", nickname: ")
-                        .append(entry.getValue())
-                        .append("\n");
-            }
-        } else {
-            result.append("Есть в БД, нет в супергруппе. Почему не заходят?\n");
-            for (Map.Entry<Long, GroupUser> entry : notInSupergroup.entrySet()) {
-                result.append("id: ")
-                        .append(entry.getKey())
-                        .append(", nickname: ")
-                        .append(entry.getValue().getNickname())
-                        .append("\n");
-            }
-            result.append("=========\n");
         }
 
-        // проверяем истекающие подписки
-        LocalDate now = LocalDate.now();
-        LocalDate threshold = LocalDate.now().plusDays(3);
-        StringBuilder expiringSubscription = new StringBuilder("Подписка истекает:\n");
-        boolean expiringSubscriptionIsExist = false;
+        adminBotService.saveAll(groupUsersNotInSql);
 
-        for (GroupUser groupUser : adminBotService.getAllUsers()) {
-            if (groupUser.getStatus().equals(UserStatus.BANNED.toString()))
-                continue;
-
-            if (groupUser.getSubscriptionExpiration().isBefore(now)) {
-                telegramGateway.banUser(groupUser);
-                adminBotService.banUser(groupUser.getNickname());
-                continue;
-            }
-
-            if (groupUser.getSubscriptionExpiration().isBefore(threshold)) {
-                expiringSubscriptionIsExist = true;
-                expiringSubscription.append("id: ")
-                        .append(groupUser.getTelegramId())
-                        .append(", nickname: ")
-                        .append(groupUser.getNickname())
-                        .append(". истекает")
-                        .append(groupUser.getSubscriptionExpiration())
-                        .append("\n");
-            }
-
-            if (expiringSubscriptionIsExist) {
-                result.append(expiringSubscription);
-            }
+        StringBuilder result = new StringBuilder("Следующие пользователи были добавлены в БД, проставьте подписку по необходимости:\n\n");
+        for (GroupUser groupUser : groupUsersNotInSql) {
+            result.append(groupUser.toStringSupergroup());
         }
 
         return result.toString();
     }
+
+    public String scanSupergroup() {
+        List<GroupUser> groupUsersNotInSupergroup = supergroupService.findGroupUsersNotInSupergroup();
+        StringBuilder
+        for (GroupUser groupUser : groupUsersNotInSupergroup) {
+
+
+        }
+
+
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//        StringBuilder result = new StringBuilder();
+//
+//        // Мапа реальных пользователей из супергруппы, ключ - TelegramId
+//        SortedMap<Long, String> existingUsers = new TreeMap<>(supergroupService.getAllMembers());
+//
+//        List<GroupUser> allGroupUsers = supergroupService.getAllGroupUsers();
+//
+//        // Мапа пользователей из SQL БД
+//        SortedMap<Long, GroupUser> groupUsersMap = adminBotService.getAllUsers()
+//                .stream()
+//                .collect(
+//                        Collectors.toMap(
+//                                GroupUser::getId,
+//                                Function.identity(),
+//                                (firstUser, secondUser) -> firstUser,
+//                                TreeMap::new));
+//
+//        SortedMap<Long, String> notInSql = existingUsers.entrySet().stream()
+//                .filter(e -> !groupUsersMap.containsKey(e.getKey()))
+//                .collect(Collectors.toMap(
+//                        Map.Entry::getKey,
+//                        Map.Entry::getValue,
+//                        (firstUser, secondUser) -> firstUser,
+//                        TreeMap::new
+//                ));
+//
+//        SortedMap<Long, GroupUser> notInSupergroup = groupUsersMap.entrySet().stream()
+//                .filter(e -> !existingUsers.containsKey(e.getKey()))
+//                .collect(Collectors.toMap(
+//                        Map.Entry::getKey,
+//                        Map.Entry::getValue,
+//                        (firstUser, secondUser) -> firstUser,
+//                        TreeMap::new
+//                ));
+//
+//        //добавляем оставшихся из супергруппы в БД
+//        List<GroupUser> toAdd = new ArrayList<>();
+//        for (Map.Entry<Long, String> entry : notInSql.entrySet()) {
+//
+//        }
+//
+//        // проверяем соответствие nickname из супергруппы и из SQL, корректируем по необходимости
+//        if (notInSql.isEmpty() && notInSupergroup.isEmpty()) {
+//            List<GroupUser> realGroupUsers = new ArrayList<>();
+//            GroupUser currentGroupUser;
+//            for (Map.Entry<Long, String> entry : existingUsers.entrySet()) {
+//                currentGroupUser = groupUsersMap.get(entry.getKey());
+//                if (!currentGroupUser.getNickname().equals(entry.getValue())) {
+//                    result.append("Юзер ")
+//                            .append(currentGroupUser.getTelegramId())
+//                            .append(" сменил nickname c ")
+//                            .append(currentGroupUser.getNickname())
+//                            .append(" на ")
+//                            .append(entry.getValue())
+//                            .append("\n");
+//                    currentGroupUser.setNickname(entry.getValue());
+//                }
+//                result.append("---------\n");
+//                realGroupUsers.add(currentGroupUser);
+//            }
+//            adminBotService.saveAll(realGroupUsers);
+//        } else if (notInSupergroup.isEmpty()) {
+//            result.append("Есть в супергруппе, но нет в БД. Проверить подписки:\n");
+//            for (Map.Entry<Long, String> entry : notInSql.entrySet()) {
+//                result.append("id: ")
+//                        .append(entry.getKey())
+//                        .append(", nickname: ")
+//                        .append(entry.getValue())
+//                        .append("\n");
+//            }
+//        } else {
+//            result.append("Есть в БД, нет в супергруппе. Почему не заходят?\n");
+//            for (Map.Entry<Long, GroupUser> entry : notInSupergroup.entrySet()) {
+//                result.append("id: ")
+//                        .append(entry.getKey())
+//                        .append(", nickname: ")
+//                        .append(entry.getValue().getNickname())
+//                        .append("\n");
+//            }
+//            result.append("=========\n");
+//        }
+//
+//        // проверяем истекающие подписки
+//        LocalDate now = LocalDate.now();
+//        LocalDate threshold = LocalDate.now().plusDays(3);
+//        StringBuilder expiringSubscription = new StringBuilder("Подписка истекает:\n");
+//        boolean expiringSubscriptionIsExist = false;
+//
+//        for (GroupUser groupUser : adminBotService.getAllUsers()) {
+//            if (groupUser.getStatus().equals(UserStatus.BANNED.toString()))
+//                continue;
+//
+//            if (groupUser.getSubscriptionExpiration().isBefore(now)) {
+//                telegramGateway.banUser(groupUser);
+//                adminBotService.banUser(groupUser.getNickname());
+//                continue;
+//            }
+//
+//            if (groupUser.getSubscriptionExpiration().isBefore(threshold)) {
+//                expiringSubscriptionIsExist = true;
+//                expiringSubscription.append("id: ")
+//                        .append(groupUser.getTelegramId())
+//                        .append(", nickname: ")
+//                        .append(groupUser.getNickname())
+//                        .append(". истекает")
+//                        .append(groupUser.getSubscriptionExpiration())
+//                        .append("\n");
+//            }
+//
+//            if (expiringSubscriptionIsExist) {
+//                result.append(expiringSubscription);
+//            }
+//        }
+//
+//        return result.toString();
+//    }
+
 }

@@ -3,6 +3,7 @@ package org.example.illuminatiadminbot.outbound.model;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
+import org.example.illuminatiadminbot.inbound.model.TelegramUserStatus;
 
 import java.time.LocalDate;
 
@@ -26,7 +27,8 @@ public class GroupUser {
     String nickname;
 
     @Column
-    String telegramUserStatus;
+    @Enumerated(EnumType.STRING)
+    TelegramUserStatus telegramUserStatus;
 
     @Column
     String subscriptionType;
@@ -42,4 +44,11 @@ public class GroupUser {
 
     @Column
     Long chatId;
+
+    public String toStringSupergroup() {
+        return "telegramId=" + telegramId +
+                ", \nnickname='" + nickname + '\'' +
+                ", \ntelegramUserStatus='" + telegramUserStatus + '\'' +
+                "\n";
+    }
 }

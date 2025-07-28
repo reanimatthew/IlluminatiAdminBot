@@ -1,5 +1,6 @@
 package org.example.illuminatiadminbot.outbound.repository;
 
+import org.example.illuminatiadminbot.inbound.model.TelegramUserStatus;
 import org.example.illuminatiadminbot.outbound.model.GroupUser;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -13,9 +14,9 @@ public interface GroupUserRepository extends JpaRepository<GroupUser,Long> {
 
     Optional<GroupUser> findByNickname(String nickname);
 
-    List<GroupUser> findAllByTelegramUserStatus(String role);
+    List<GroupUser> findAllByTelegramUserStatus(TelegramUserStatus role);
 
-    List<GroupUser> findAllByTelegramUserStatusAndChatIdIsNotNull(String role);
+    List<GroupUser> findAllByTelegramUserStatusAndChatIdIsNotNull(TelegramUserStatus role);
 
     Optional<GroupUser> findByTelegramId(long userId);
 }

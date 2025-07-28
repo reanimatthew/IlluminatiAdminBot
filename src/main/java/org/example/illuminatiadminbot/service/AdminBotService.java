@@ -45,7 +45,7 @@ public class AdminBotService {
                     .subscriptionType(subscriptionType)
                     .subscriptionDuration(subscribeDuration)
                     .subscriptionExpiration(expirationDate)
-                    .telegramUserStatus(TelegramUserStatus.MEMBER.name())
+                    .telegramUserStatus(TelegramUserStatus.ADMINISTRATOR)
                     .build();
             groupUserRepository.save(groupUser);
         } else {
@@ -59,7 +59,7 @@ public class AdminBotService {
     }
 
     public List<GroupUser> adminShow() {
-        return groupUserRepository.findAllByTelegramUserStatus(TelegramUserStatus.ADMINISTRATOR.name());
+        return groupUserRepository.findAllByTelegramUserStatus(TelegramUserStatus.ADMINISTRATOR);
     }
 
     public String loadUsers() {
@@ -107,21 +107,23 @@ public class AdminBotService {
         return groupUserRepository.findAll();
     }
 
+    @Transactional
     public void saveAll(List<GroupUser> realGroupUsers) {
         if (!realGroupUsers.isEmpty())
             groupUserRepository.saveAll(realGroupUsers);
     }
 
     public String getAllAdmins() {
-        List<GroupUser> admins = groupUserRepository.findAllByTelegramUserStatus("admin");
+        List<GroupUser> admins = groupUserRepository.findAllByTelegramUserStatus(TelegramUserStatus.ADMINISTRATOR);
         return "Существующие администраторы:\n" + admins.stream().map(GroupUser::getNickname).collect(Collectors.joining("\n"));
     }
 
     public List<Long> getAllAdminsChatId() {
-        List<GroupUser> admins = groupUserRepository.findAllByTelegramUserStatusAndChatIdIsNotNull("admin");
+        List<GroupUser> admins = groupUserRepository.findAllByTelegramUserStatusAndChatIdIsNotNull(TelegramUserStatus.ADMINISTRATOR);
         return admins.stream().map(GroupUser::getChatId).collect(Collectors.toList());
     }
 
+    @Transactional
     public void saveChatId(String nickname, Long ChatId) {
         Optional<GroupUser> groupUserOptional = groupUserRepository.findByNickname(nickname);
         if (groupUserOptional.isPresent()) {
@@ -131,6 +133,7 @@ public class AdminBotService {
         }
     }
 
+    @Transactional
     public void saveGroupUser(GroupUser groupAdmin) {
         groupUserRepository.save(groupAdmin);
     }
