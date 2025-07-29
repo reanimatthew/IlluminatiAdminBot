@@ -283,6 +283,6 @@ public class MenuBuilder {
                 .build();
     }
 
-    public InlineKeyboardMarkup getNickOrPhone(Update update) {
-    }
+//    public InlineKeyboardMarkup getNickOrPhone(Update update) {
+//    }
 }

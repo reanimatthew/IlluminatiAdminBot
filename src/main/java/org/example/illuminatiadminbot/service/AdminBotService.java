@@ -1,6 +1,7 @@
 package org.example.illuminatiadminbot.service;
 
 import lombok.AllArgsConstructor;
+import org.example.illuminatiadminbot.inbound.menu.Subscription;
 import org.example.illuminatiadminbot.inbound.model.TelegramUserStatus;
 import org.example.illuminatiadminbot.inbound.model.UploadDetails;
 import org.example.illuminatiadminbot.inbound.model.UserStatus;
@@ -42,7 +43,7 @@ public class AdminBotService {
             groupUser = GroupUser.builder()
                     .nickname(nickname)
                     .telegramId(-1L)
-                    .subscriptionType(subscriptionType)
+                    .subscriptionType(Subscription.fromString(subscriptionType))
                     .subscriptionDuration(subscribeDuration)
                     .subscriptionExpiration(expirationDate)
                     .telegramUserStatus(TelegramUserStatus.ADMINISTRATOR)
@@ -50,7 +51,7 @@ public class AdminBotService {
             groupUserRepository.save(groupUser);
         } else {
             groupUser = userOptional.get();
-            groupUser.setSubscriptionType(subscriptionType);
+            groupUser.setSubscriptionType(Subscription.fromString(subscriptionType));
             groupUser.setSubscriptionDuration(subscribeDuration);
             groupUser.setSubscriptionExpiration(expirationDate);
             groupUserRepository.save(groupUser);

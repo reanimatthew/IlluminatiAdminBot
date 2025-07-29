@@ -1,18 +1,17 @@
 package org.example.illuminatiadminbot.service;
 
+import it.tdlight.client.SimpleTelegramClient;
+import it.tdlight.client.TelegramError;
+import it.tdlight.jni.TdApi;
 import jakarta.annotation.PostConstruct;
-import org.drinkless.tdlight.ClientManager;
-import org.drinkless.tdlight.SimpleTelegramClient;
-import org.drinkless.tdlight.TdApi;
-import org.drinkless.tdlight.TdApi.Exception as TdApiException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 
 import java.util.concurrent.ExecutionException;
 
-@Component
+// TODO этот класс использовался для теста - удалить
+
 public class TelegramDebugRunner {
 
     private static final Logger log = LoggerFactory.getLogger(TelegramDebugRunner.class);
@@ -27,7 +26,7 @@ public class TelegramDebugRunner {
     private final SimpleTelegramClient simpleTelegramClient;
 
     public TelegramDebugRunner(
-            @Value("${telegram.chat-id}") long chatId,
+            @Value("${chat.id}") long chatId,
             SimpleTelegramClient simpleTelegramClient) {
         this.chatId = chatId;
         this.simpleTelegramClient = simpleTelegramClient;
@@ -38,7 +37,6 @@ public class TelegramDebugRunner {
         log.info("DEBUG: пытаемся получить ChatMember для userId={} в чате {}", userIdNotInChat, chatId);
 
         try {
-            // Прямой вызов TdLib
             TdApi.ChatMember chatMember = simpleTelegramClient
                     .send(new TdApi.GetChatMember(
                             chatId,
@@ -54,11 +52,11 @@ public class TelegramDebugRunner {
         } catch (ExecutionException ee) {
             Throwable cause = ee.getCause();
 
-            // TdLib бросает обёртку TdApiException, внутри которой лежит TdApi.Error
-            if (cause instanceof TdApiException tdEx) {
-                TdApi.Error err = tdEx.error;  // Получаем тело ошибки
-                log.warn("TdApi.Error: code={} message='{}'", err.code, err.message);
-
+            //  ✅ Правильный тип исключения
+            if (cause instanceof TelegramError tgErr) {
+                TdApi.Error err = tgErr.getError();     // сам объект TdApi.Error
+                log.warn("TdApi.Error: code={} message='{}'",
+                        err.code, err.message);        // :contentReference[oaicite:1]{index=1}
             } else {
                 log.error("ExecutionException при GetChatMember", ee);
             }

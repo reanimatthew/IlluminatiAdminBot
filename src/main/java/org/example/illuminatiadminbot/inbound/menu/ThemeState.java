@@ -21,12 +21,6 @@ public enum ThemeState {
         return displayName;
     }
 
-//    public static List<String> getDisplayNames() {
-//        return Arrays.stream(values())
-//                .map(ThemeState::getDisplayName)
-//                .collect(Collectors.toList());
-//    }
-
     public static boolean contains(String name) {
         for (ThemeState ts : values()) {
             if (ts.name().equals(name)) {

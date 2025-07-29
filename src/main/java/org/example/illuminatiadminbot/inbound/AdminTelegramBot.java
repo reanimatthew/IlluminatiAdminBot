@@ -1,5 +1,6 @@
 package org.example.illuminatiadminbot.inbound;
 
+import jakarta.annotation.PostConstruct;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,6 +13,7 @@ import org.example.illuminatiadminbot.outbound.model.GroupUser;
 import org.example.illuminatiadminbot.outbound.model.MinioFileDetail;
 import org.example.illuminatiadminbot.service.AdminBotService;
 import org.example.illuminatiadminbot.service.SupergroupService;
+import org.example.illuminatiadminbot.service.TelegramDebugRunner;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.longpolling.interfaces.LongPollingUpdateConsumer;
@@ -56,7 +58,6 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
     private final TopicProperties topicProperties;
     private final PhoneValidatorAndNormalizer phoneValidatorAndNormalizer;
     private final TelegramGateway telegramGateway;
-
 
     @Value("${telegram.bot.token}")
     private String token;
@@ -133,14 +134,13 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
             String message = "";
             if (update.getMessage().getText().equals("/correctSql")) {
                 message = supergroupService.correctSql();
+                SendMessage sendMessage = SendMessage.builder()
+                        .chatId(update.getMessage().getChatId())
+                        .text(message)
+                        .build();
+
+                telegramGateway.safeExecute(sendMessage);
             }
-
-            SendMessage sendMessage = SendMessage.builder()
-                    .chatId(update.getMessage().getChatId())
-                    .text(message)
-                    .build();
-
-            telegramGateway.safeExecute(sendMessage);
         }
 
         Long chatId = update.hasMessage()
@@ -223,9 +223,9 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                     ctx.subscriptionDetails.set(1, data);
                     ctx.subscriptionDetails.set(2, "");
                     ctx.menuState = MenuState.NICK_OR_PHONE_MENU;
-                    InlineKeyboardMarkup markup = menuBuilder.getNickOrPhone(update);
-                    EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Подписка: " + ctx.subscriptionDetails.get(0) + "\nCрок: " + ctx.subscriptionDetails.get(1) + "\nБудете вводить nickname или телефон подписчика?");
-                    safeExecute(editMessage);
+//                    InlineKeyboardMarkup markup = menuBuilder.getNickOrPhone(update);
+//                    EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Подписка: " + ctx.subscriptionDetails.get(0) + "\nCрок: " + ctx.subscriptionDetails.get(1) + "\nБудете вводить nickname или телефон подписчика?");
+//                    safeExecute(editMessage);
                 } else if ("BACK-TO-SUBSCRIPTION".equals(data)) {
                     ctx.subscriptionDetails.set(0, "");
                     ctx.subscriptionDetails.set(1, "");
@@ -409,7 +409,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                         GroupUser groupAdmin = supergroupService.addUserToSupergroup(phone);
                         if (groupAdmin != null) {
                             promoteToAdmin(groupAdmin.getTelegramId());
-                            groupAdmin.setSubscriptionType(Subscription.ADMIN.name());
+                            groupAdmin.setSubscriptionType(Subscription.ADMIN);
                             groupAdmin.setSubscriptionDuration(5 * 12);
                             groupAdmin.setSubscriptionExpiration(LocalDate.now().plusYears(5));
                             adminBotService.saveGroupUser(groupAdmin);

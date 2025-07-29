@@ -10,10 +10,18 @@ public enum Subscription {
 
     public static boolean contains(String s) {
         try {
-            Subscription.valueOf(s);
+            Subscription.valueOf(s.trim().toUpperCase());
             return true;
         } catch (IllegalArgumentException e) {
             return false;
+        }
+    }
+
+    public static Subscription fromString(String s) {
+        try {
+            return Subscription.valueOf(s.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return null;
         }
     }
 }

@@ -1,6 +1,7 @@
 package org.example.illuminatiadminbot.service;
 
 import it.tdlight.client.SimpleTelegramClient;
+import it.tdlight.client.TelegramError;
 import it.tdlight.jni.TdApi;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,7 +13,6 @@ import org.example.illuminatiadminbot.outbound.model.GroupUser;
 import org.example.illuminatiadminbot.outbound.repository.GroupUserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.*;
@@ -91,47 +91,23 @@ public class SupergroupService {
         return existingUsers;
     }
 
-    @Transactional
     public GroupUser addUserToSupergroup(String phone) {
 
-        // Создаём объект контакта для импорта в Telegram по переданному номеру
-        TdApi.Contact contact = new TdApi.Contact(
-                phone,
-                "",
-                "",
-                "",
-                0L
-        );
+        long telegramId = getTelegramIdByPhone(phone);
 
-        // Формируем запрос на импорт контактов в Telegram
-        TdApi.ImportContacts importContacts = new TdApi.ImportContacts(new TdApi.Contact[]{contact});
-        TdApi.ImportedContacts imported;
-        try {
-            imported = simpleTelegramClient.send(importContacts).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new RuntimeException(e);
-        }
+        if (telegramId == 0L)
+            return null;
 
-        log.info(imported.toString());
+        String nickname = getNicknameByTelegramId(telegramId);
 
-        // Берём ID первого (и единственного) импортированного пользователя
-        long userId = imported.userIds[0];
-        if (userId == 0L)
-            return null; // Контакт не найден
-
-
-//        if (getAllAdminIdsFromSupergroup().contains(userId)) {
-//            Optional<GroupUser> groupUserOptional = groupUserRepository.findByTelegramId(userId);
-//            GroupUser groupUser = groupUserOptional.orElseGet(() -> activateGroupUserById(userId, TelegramUserStatus.ADMINISTRATOR));
-//            return groupUserRepository.save(groupUser);
-//        }
-
-        if (getGroupUserById(userId) == null)
-            return GroupUser.builder().build(); //
+        // проверяем, есть ли юзер в группе
+        GroupUser existUser = getGroupUserById(telegramId);
+        if (existUser != null)
+            return existUser;
 
         TdApi.AddChatMember inviteRequest = new TdApi.AddChatMember(
                 chatId,
-                userId,
+                telegramId,
                 0
         );
 
@@ -141,9 +117,7 @@ public class SupergroupService {
             throw new RuntimeException(e);
         }
 
-        GroupUser groupUser = activateGroupUserById(userId, TelegramUserStatus.ADMINISTRATOR);
-
-        TdApi.RemoveContacts removeRequest = new TdApi.RemoveContacts(new long[]{userId});
+        TdApi.RemoveContacts removeRequest = new TdApi.RemoveContacts(new long[]{telegramId});
 
         try {
             simpleTelegramClient.send(removeRequest).get();
@@ -151,8 +125,7 @@ public class SupergroupService {
             throw new RuntimeException(e);
         }
 
-
-        return groupUser;
+        return GroupUser.createNewMember(telegramId, nickname);
     }
 
     private List<Long> getAllAdminIdsFromSupergroup() {
@@ -194,38 +167,42 @@ public class SupergroupService {
         return adminIds;
     }
 
-    public GroupUser getGroupUserById(long userId) {
+    public GroupUser getGroupUserById(long telegramId) {
 
-        TdApi.User user;
-
-        try {
-            user = simpleTelegramClient.send(new TdApi.GetUser(userId)).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new RuntimeException(e);
-        }
-
-        String nickname = "";
-        if (user.usernames != null && user.usernames.editableUsername != null) {
-            nickname = user.usernames.editableUsername;
-        }
-
-        TdApi.ChatMember chatMember;
+        // проверяем наличие юзера в группе
+        TdApi.ChatMember chatMember = null;
         try {
             chatMember = simpleTelegramClient.send(
                     new TdApi.GetChatMember(
                             chatId,
-                            new TdApi.MessageSenderUser(userId)
+                            new TdApi.MessageSenderUser(telegramId)
                     )
             ).get();
-        } catch (ExecutionException | InterruptedException e) {
+        } catch (ExecutionException e) {
+            // этот код ловит отсутствие юзера в группе
+            Throwable cause = e.getCause();
+            if (cause instanceof TelegramError telegramError) {
+                TdApi.Error error = telegramError.getError();
+                if (error.code == 400 && "Member not found".equals(error.message)) {
+                    return null;
+                }
+            } else {
+                throw new RuntimeException(e);
+            }
+        } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
 
-        return GroupUser.builder()
-                .telegramId(userId)
-                .nickname(nickname)
-                .telegramUserStatus(chatMemberStatusMapper.simplifyStatus(chatMember.status))
-                .build();
+        String nickname = getNicknameByTelegramId(telegramId);
+
+        TelegramUserStatus telegramUserStatus = chatMemberStatusMapper.simplifyStatus(chatMember.status);
+
+        return switch (telegramUserStatus) {
+            case CREATOR -> GroupUser.createNewCreator(telegramId, nickname);
+            case ADMINISTRATOR ->  GroupUser.createNewAdministrator(telegramId, nickname);
+            case MEMBER -> GroupUser.createNewMember(telegramId, nickname);
+            default -> throw new RuntimeException("Unknown TelegramUserStatus: " + telegramUserStatus);
+        };
     }
 
     public List<GroupUser> getAllGroupUsers() {
@@ -260,8 +237,6 @@ public class SupergroupService {
         for (TdApi.ChatMember chatMember : allMembers) {
             TdApi.MessageSenderUser messageSenderUser = (TdApi.MessageSenderUser) chatMember.memberId;
             groupUser = getGroupUserById(messageSenderUser.userId);
-            groupUser.setStatus(UserStatus.ACTIVE);
-            groupUser.setTelegramUserStatus(chatMemberStatusMapper.simplifyStatus(chatMember.status));
             groupUsers.add(groupUser);
         }
 
@@ -336,15 +311,15 @@ public class SupergroupService {
 
         for (GroupUser groupUser : groupUsersNotInSql) {
             if (groupUser.getTelegramUserStatus() == TelegramUserStatus.ADMINISTRATOR) {
-                groupUser.setSubscriptionType(Subscription.ADMIN.name());
+                groupUser.setSubscriptionType(Subscription.ADMIN);
                 groupUser.setSubscriptionDuration(5 * 12);
                 groupUser.setSubscriptionExpiration(LocalDate.now().plusYears(5));
             } else if (groupUser.getTelegramUserStatus() == TelegramUserStatus.CREATOR) {
-                groupUser.setSubscriptionType(Subscription.CREATOR.name());
+                groupUser.setSubscriptionType(Subscription.CREATOR);
                 groupUser.setSubscriptionDuration(20 * 12);
                 groupUser.setSubscriptionExpiration(LocalDate.now().plusYears(20));
             } else if (groupUser.getTelegramUserStatus() == TelegramUserStatus.MEMBER) {
-                groupUser.setSubscriptionType(Subscription.TEMP.name());
+                groupUser.setSubscriptionType(Subscription.TEMP);
                 groupUser.setSubscriptionDuration(1);
                 groupUser.setSubscriptionExpiration(LocalDate.now().plusMonths(1));
             }
@@ -401,5 +376,48 @@ public class SupergroupService {
                 .filter(groupUser -> !telegramIdsFromSupergroup.contains(groupUser.getTelegramId()))
                 .toList();
 
+    }
+
+    public String getNicknameByTelegramId(long telegramId) {
+
+        TdApi.User user;
+
+        try {
+            user = simpleTelegramClient.send(new TdApi.GetUser(telegramId)).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+
+        String nickname = "";
+        if (user.usernames != null && user.usernames.editableUsername != null) {
+            nickname = user.usernames.editableUsername;
+        }
+
+        return nickname;
+    }
+
+    public long getTelegramIdByPhone(String phone) {
+        // Создаём объект контакта для импорта в Telegram по переданному номеру
+        TdApi.Contact contact = new TdApi.Contact(
+                phone,
+                "",
+                "",
+                "",
+                0L
+        );
+
+        // Формируем запрос на импорт контактов в Telegram
+        TdApi.ImportContacts importContacts = new TdApi.ImportContacts(new TdApi.Contact[]{contact});
+        TdApi.ImportedContacts imported;
+        try {
+            imported = simpleTelegramClient.send(importContacts).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+
+        log.info(imported.toString());
+
+        // Берём ID первого (и единственного) импортированного пользователя
+        return imported.userIds[0];
     }
 }
