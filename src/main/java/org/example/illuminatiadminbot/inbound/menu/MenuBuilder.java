@@ -105,7 +105,7 @@ public class MenuBuilder {
                 .build();
     }
 
-    public InlineKeyboardMarkup getNickname(Update update) {
+    public InlineKeyboardMarkup getSubscriberId(Update update) {
 
         InlineKeyboardButton btn1 = InlineKeyboardButton.builder()
                 .text("← Назад")
@@ -281,5 +281,8 @@ public class MenuBuilder {
         return InlineKeyboardMarkup.builder()
                 .keyboardRow(row1)
                 .build();
+    }
+
+    public InlineKeyboardMarkup getNickOrPhone(Update update) {
     }
 }

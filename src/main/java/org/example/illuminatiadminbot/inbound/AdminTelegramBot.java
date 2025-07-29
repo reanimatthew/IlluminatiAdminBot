@@ -117,7 +117,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                 for (GroupUser groupUserFromSupergroup : groupUsersFromSupergroup) {
                     stringBuilder.append(groupUserFromSupergroup.toStringSupergroup()).append("\n");
                 }
-                SendMessage sendMessage =  SendMessage.builder()
+                SendMessage sendMessage = SendMessage.builder()
                         .chatId(update.getMessage().getChatId())
                         .text(stringBuilder.toString())
                         .build();
@@ -127,6 +127,20 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                     throw new RuntimeException(e);
                 }
             }
+        }
+
+        if (update.hasMessage() && update.getMessage().hasText()) {
+            String message = "";
+            if (update.getMessage().getText().equals("/correctSql")) {
+                message = supergroupService.correctSql();
+            }
+
+            SendMessage sendMessage = SendMessage.builder()
+                    .chatId(update.getMessage().getChatId())
+                    .text(message)
+                    .build();
+
+            telegramGateway.safeExecute(sendMessage);
         }
 
         Long chatId = update.hasMessage()
@@ -140,6 +154,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
             if (text.equals("/menu") || text.equals("/cancel") || text.equals("/start")) {
                 ctx.subscriptionDetails.set(0, "");
                 ctx.subscriptionDetails.set(1, "");
+                ctx.subscriptionDetails.set(2, "");
                 ctx.uploadDetails.clearUploadDetails();
                 ctx.menuState = MenuState.MAIN_MENU;
                 InlineKeyboardMarkup markup = menuBuilder.getMain(update);
@@ -159,6 +174,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                 if ("SUBSCRIPTION".equals(data)) {
                     ctx.subscriptionDetails.set(0, "");
                     ctx.subscriptionDetails.set(1, "");
+                    ctx.subscriptionDetails.set(2, "");
                     ctx.menuState = MenuState.SUBSCRIPTION_MENU;
                     InlineKeyboardMarkup markup = menuBuilder.getSubscription(update);
                     EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Выберите подписку:");
@@ -186,6 +202,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                 if (Subscription.contains(data)) {
                     ctx.subscriptionDetails.set(0, data);
                     ctx.subscriptionDetails.set(1, "");
+                    ctx.subscriptionDetails.set(2, "");
                     ctx.menuState = MenuState.DURATION_MENU;
                     InlineKeyboardMarkup markup = menuBuilder.getDuration(update);
                     EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Подписка: " + ctx.subscriptionDetails.get(0) + "\nВыберите срок подписки:");
@@ -193,6 +210,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                 } else if ("BACK-TO-MAIN".equals(data)) {
                     ctx.subscriptionDetails.set(0, "");
                     ctx.subscriptionDetails.set(1, "");
+                    ctx.subscriptionDetails.set(2, "");
                     ctx.menuState = MenuState.MAIN_MENU;
                     InlineKeyboardMarkup markup = menuBuilder.getMain(update);
                     EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Выберите действие:");
@@ -203,13 +221,15 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
             case DURATION_MENU -> {
                 if (List.of("1M", "3M", "6M", "12M").contains(data)) {
                     ctx.subscriptionDetails.set(1, data);
-                    ctx.menuState = MenuState.NICKNAME_MENU;
-                    InlineKeyboardMarkup markup = menuBuilder.getNickname(update);
-                    EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Подписка: " + ctx.subscriptionDetails.get(0) + "\nCрок: " + ctx.subscriptionDetails.get(1) + "\nВведите nickname подписчика:");
+                    ctx.subscriptionDetails.set(2, "");
+                    ctx.menuState = MenuState.NICK_OR_PHONE_MENU;
+                    InlineKeyboardMarkup markup = menuBuilder.getNickOrPhone(update);
+                    EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Подписка: " + ctx.subscriptionDetails.get(0) + "\nCрок: " + ctx.subscriptionDetails.get(1) + "\nБудете вводить nickname или телефон подписчика?");
                     safeExecute(editMessage);
                 } else if ("BACK-TO-SUBSCRIPTION".equals(data)) {
                     ctx.subscriptionDetails.set(0, "");
                     ctx.subscriptionDetails.set(1, "");
+                    ctx.subscriptionDetails.set(2, "");
                     ctx.menuState = MenuState.SUBSCRIPTION_MENU;
                     InlineKeyboardMarkup markup = menuBuilder.getSubscription(update);
                     EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Выберите подписку:");
@@ -217,13 +237,38 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                 }
             }
 
-            case NICKNAME_MENU -> {
+            case NICK_OR_PHONE_MENU -> {
+                if (List.of("BY-PHONE","BY-NICK").contains(data)) {
+                    ctx.subscriptionDetails.set(2, data);
+                    ctx.menuState = MenuState.SUBSCRIBER_ID_MENU;
+                    InlineKeyboardMarkup markup = menuBuilder.getSubscriberId(update);
+                    String phoneOrNick = "BY-PHONE".equals(data) ? "Введите телефон подписчика" : "Введите никнейм подписчика";
+                    EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Подписка: " + ctx.subscriptionDetails.get(0) + "\nСрок: " + ctx.subscriptionDetails.get(1) + "\n" + phoneOrNick);
+                    telegramGateway.safeExecute(editMessage);
+                } else if ("BACK-TO-DURATION".equals(data)) {
+                    ctx.subscriptionDetails.set(2, "");
+                    ctx.menuState = MenuState.DURATION_MENU;
+                    InlineKeyboardMarkup markup = menuBuilder.getDuration(update);
+                    EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Подписка: " + ctx.subscriptionDetails.get(0) + "\nВыберите срок подписки:");
+                    safeExecute(editMessage);
+                }
+            }
+
+            case SUBSCRIBER_ID_MENU -> {
                 if (!text.isEmpty()) {
-                    text = text.trim();
-                    if (text.startsWith("@")) {
-                        text = text.substring(1);
+                    String subscription = "";
+                    if (ctx.subscriptionDetails.get(2).equals("BY-NICK")) {
+                        text = text.trim();
+                        if (text.startsWith("@")) {
+                            text = text.substring(1);
+                        }
+                        subscription = adminBotService.subscribeUser(text, ctx.subscriptionDetails);
+                    } else if (ctx.subscriptionDetails.get(2).equals("BY-PHONE")) {
+                        String phone = phoneValidatorAndNormalizer.validateAndNormalize(text);
+//                        supergroupService.addUserToSupergroup()
+
                     }
-                    String subscription = adminBotService.subscribeUser(text, ctx.subscriptionDetails);
+
                     clearMenu(update, ctx.lastMessageId, subscription);
                 } else if ("BACK-TO-DURATION".equals(data)) {
                     ctx.subscriptionDetails.set(1, "");
@@ -400,7 +445,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                         nickname = text.substring(1);
                     }
 
-                    if (supergroupService.banUser(nickname) && adminBotService.banUser(nickname) ) {
+                    if (supergroupService.banUser(nickname) && adminBotService.banUser(nickname)) {
                         clearMenu(update, ctx.lastMessageId, "Администратор " + nickname + " удалён");
                     } else {
                         ctx.menuState = MenuState.DISMISSAL_MENU;
@@ -424,7 +469,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                         nickname = text.substring(1);
                     }
 
-                    if (supergroupService.banUser(nickname) && adminBotService.banUser(nickname) ) {
+                    if (supergroupService.banUser(nickname) && adminBotService.banUser(nickname)) {
                         clearMenu(update, ctx.lastMessageId, "Пользователь " + nickname + " заблокирован");
                     } else {
                         ctx.menuState = MenuState.BAN_MENU;
@@ -535,7 +580,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
             adminNickname = "В БД нет администраторов.\n";
         } else {
             adminNickname = admins.stream()
-                    .filter(groupUser -> groupUser.getStatus().equalsIgnoreCase(UserStatus.ACTIVE.name()))
+                    .filter(groupUser -> groupUser.getStatus() == UserStatus.ACTIVE)
                     .map(GroupUser::getNickname)
                     .collect(Collectors.joining("\n"));
         }
@@ -557,7 +602,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
 
     @Data
     public static class ConversationContext {
-        private final ArrayList<String> subscriptionDetails = new ArrayList<>(List.of("", ""));
+        private final ArrayList<String> subscriptionDetails = new ArrayList<>(List.of("", "", ""));
         private UploadDetails uploadDetails = new UploadDetails();
         private MenuState menuState = MenuState.MAIN_MENU;
         private Integer lastMessageId = null;

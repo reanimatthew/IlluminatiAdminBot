@@ -4,7 +4,9 @@ public enum Subscription {
     BASIC,
     PREMIUM,
     GOLD,
-    ADMIN;
+    ADMIN,
+    CREATOR,
+    TEMP;
 
     public static boolean contains(String s) {
         try {

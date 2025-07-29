@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import org.example.illuminatiadminbot.inbound.model.TelegramUserStatus;
+import org.example.illuminatiadminbot.inbound.model.UserStatus;
 
 import java.time.LocalDate;
 
@@ -40,7 +41,8 @@ public class GroupUser {
     LocalDate subscriptionExpiration;
 
     @Column
-    String status;
+    @Enumerated(EnumType.STRING)
+    UserStatus status;
 
     @Column
     Long chatId;
@@ -50,5 +52,19 @@ public class GroupUser {
                 ", \nnickname='" + nickname + '\'' +
                 ", \ntelegramUserStatus='" + telegramUserStatus + '\'' +
                 "\n";
+    }
+
+    public String toStringSql() {
+        return "Telegram ID: " + telegramId +
+                "\nник: " + nickname +
+                "\nстатус: " + telegramUserStatus +
+                "\nтип подписки: " + subscriptionType +
+                "\nдлительность подписки, мес.: " + subscriptionDuration +
+                "\nподписка истекает: " + subscriptionExpiration +
+                "\n\n";
+    }
+
+    public boolean isActive() {
+        return status == UserStatus.ACTIVE;
     }
 }

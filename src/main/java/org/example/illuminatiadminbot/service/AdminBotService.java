@@ -94,7 +94,7 @@ public class AdminBotService {
                 throw new NoSuchElementException();
             }
             GroupUser groupUser = groupUserOptional.get();
-            groupUser.setStatus(UserStatus.BANNED.toString());
+            groupUser.setStatus(UserStatus.BANNED);
             groupUserRepository.save(groupUser);
         } catch (NoSuchElementException _) {
             return false;

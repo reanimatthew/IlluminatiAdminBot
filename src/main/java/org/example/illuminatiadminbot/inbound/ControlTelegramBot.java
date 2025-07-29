@@ -33,10 +33,10 @@ public class ControlTelegramBot {
         this.telegramGateway = telegramGateway;
     }
 
-    @Scheduled(fixedRate = 1000 * 60 * 60)
+//    @Scheduled(fixedRate = 1000 * 60 * 60)
     public void showDailyReport() {
-        StringBuilder message = new StringBuilder(correctSql());
-        message.append(scanSupergroup());
+        StringBuilder message = new StringBuilder(supergroupService.correctSql());
+        message.append(supergroupService.scanSupergroup());
 //        List<Long> allAdminsChatId = adminBotService.getAllAdminsChatId();
 //        if (allAdminsChatId.isEmpty()) {
 //            return;
@@ -52,37 +52,7 @@ public class ControlTelegramBot {
 //        }
     }
 
-    public String correctSql() {
-        List<GroupUser> groupUsersNotInSql = supergroupService.findGroupUsersNotInSql();
 
-        for (GroupUser groupUser : groupUsersNotInSql) {
-            if (groupUser.getTelegramUserStatus() == TelegramUserStatus.ADMINISTRATOR) {
-                groupUser.setSubscriptionType(Subscription.ADMIN.name());
-                groupUser.setSubscriptionDuration(5 * 12);
-                groupUser.setSubscriptionExpiration(LocalDate.now().plusYears(5));
-            }
-        }
-
-        adminBotService.saveAll(groupUsersNotInSql);
-
-        StringBuilder result = new StringBuilder("Следующие пользователи были добавлены в БД, проставьте подписку по необходимости:\n\n");
-        for (GroupUser groupUser : groupUsersNotInSql) {
-            result.append(groupUser.toStringSupergroup());
-        }
-
-        return result.toString();
-    }
-
-    public String scanSupergroup() {
-        List<GroupUser> groupUsersNotInSupergroup = supergroupService.findGroupUsersNotInSupergroup();
-        StringBuilder
-        for (GroupUser groupUser : groupUsersNotInSupergroup) {
-
-
-        }
-
-
-    }
 
 
 
