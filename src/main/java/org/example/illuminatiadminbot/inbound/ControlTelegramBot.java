@@ -3,21 +3,9 @@ package org.example.illuminatiadminbot.inbound;
 // TODO бот для обновления БД пользователей и админов. Сделать с помощью MTProto.
 
 import lombok.extern.slf4j.Slf4j;
-import org.example.illuminatiadminbot.inbound.menu.Subscription;
-import org.example.illuminatiadminbot.inbound.model.TelegramUserStatus;
-import org.example.illuminatiadminbot.inbound.model.UserStatus;
-import org.example.illuminatiadminbot.mapper.GroupUserMapper;
-import org.example.illuminatiadminbot.outbound.model.GroupUser;
 import org.example.illuminatiadminbot.service.AdminBotService;
 import org.example.illuminatiadminbot.service.SupergroupService;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
-
-import java.time.LocalDate;
-import java.util.*;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Component

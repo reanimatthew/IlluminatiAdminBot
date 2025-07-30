@@ -20,6 +20,9 @@ public class TelegramGateway {
     @Value("${supergroup.id}")
     private Long supergroupId;
 
+    @Value("${chat.id}")
+    private Long chatId;
+
     public TelegramGateway(TelegramClient telegramClient) {
         this.telegramClient = telegramClient;
     }
@@ -52,15 +55,24 @@ public class TelegramGateway {
 
     public void banUser(GroupUser groupUser) {
         BanChatMember banChatMember = BanChatMember.builder()
-                .chatId("-100" + supergroupId)
+                .chatId(chatId)
                 .userId(groupUser.getTelegramId())
                 .build();
         safeExecute(banChatMember);
         UnbanChatMember unbanChatMember = UnbanChatMember.builder()
-                .chatId("-100" + supergroupId)
+                .chatId(chatId)
                 .userId(groupUser.getTelegramId())
                 .build();
         // это нужно просто для выбрасывания из группы, а не длительной блокировки
+        safeExecute(unbanChatMember);
+    }
+
+    public void unbanUser(GroupUser groupUser) {
+        UnbanChatMember unbanChatMember = UnbanChatMember.builder()
+                .chatId(chatId)
+                .userId(groupUser.getTelegramId())
+                .build();
+
         safeExecute(unbanChatMember);
     }
 

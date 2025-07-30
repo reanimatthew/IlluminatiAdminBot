@@ -32,7 +32,7 @@ public class AdminBotService {
     private final MinioFileDetailRepository minioFileDetailRepository;
 
     @Transactional
-    public String subscribeUser(String nickname, ArrayList<String> subscriptionDetails) {
+    public GroupUser subscribeUser(String nickname, long telegramId, ArrayList<String> subscriptionDetails) {
         String subscriptionType = subscriptionDetails.get(0);
         String numOfMonth = subscriptionDetails.get(1);
         int subscribeDuration = Integer.parseInt(numOfMonth.substring(0, numOfMonth.length() - 1));
@@ -42,21 +42,24 @@ public class AdminBotService {
         if (userOptional.isEmpty()) {
             groupUser = GroupUser.builder()
                     .nickname(nickname)
-                    .telegramId(-1L)
+                    .telegramId(telegramId)
                     .subscriptionType(Subscription.fromString(subscriptionType))
                     .subscriptionDuration(subscribeDuration)
                     .subscriptionExpiration(expirationDate)
-                    .telegramUserStatus(TelegramUserStatus.ADMINISTRATOR)
+                    .telegramUserStatus(TelegramUserStatus.MEMBER)
+                    .status(UserStatus.ACTIVE)
                     .build();
             groupUserRepository.save(groupUser);
         } else {
             groupUser = userOptional.get();
-            groupUser.setSubscriptionType(Subscription.fromString(subscriptionType));
-            groupUser.setSubscriptionDuration(subscribeDuration);
-            groupUser.setSubscriptionExpiration(expirationDate);
-            groupUserRepository.save(groupUser);
+            if (groupUser.getTelegramUserStatus().equals(TelegramUserStatus.MEMBER)) {
+                groupUser.setSubscriptionType(Subscription.fromString(subscriptionType));
+                groupUser.setSubscriptionDuration(subscribeDuration);
+                groupUser.setSubscriptionExpiration(expirationDate);
+                groupUserRepository.save(groupUser);
+            }
         }
-        return "Подписчик: " + nickname + ", подписка: " + subscriptionDetails.get(0) + ", срок: " + subscribeDuration + " мес., до: " + expirationDate;
+        return groupUser;
     }
 
     public List<GroupUser> adminShow() {
@@ -125,8 +128,8 @@ public class AdminBotService {
     }
 
     @Transactional
-    public void saveChatId(String nickname, Long ChatId) {
-        Optional<GroupUser> groupUserOptional = groupUserRepository.findByNickname(nickname);
+    public void saveChatId(Long telegramId, Long ChatId) {
+        Optional<GroupUser> groupUserOptional = groupUserRepository.findByTelegramId(telegramId);
         if (groupUserOptional.isPresent()) {
             GroupUser groupUser = groupUserOptional.get();
             groupUser.setChatId(ChatId);
@@ -137,5 +140,11 @@ public class AdminBotService {
     @Transactional
     public void saveGroupUser(GroupUser groupAdmin) {
         groupUserRepository.save(groupAdmin);
+    }
+
+    public List<Long> getAllAdminOrCreatorIds() {
+        List<GroupUser> allByTelegramUserStatus = groupUserRepository.findAllByTelegramUserStatus(TelegramUserStatus.ADMINISTRATOR);
+        allByTelegramUserStatus.addAll(groupUserRepository.findAllByTelegramUserStatus(TelegramUserStatus.CREATOR));
+        return allByTelegramUserStatus.stream().map(GroupUser::getTelegramId).collect(Collectors.toList());
     }
 }

@@ -1,6 +1,5 @@
 package org.example.illuminatiadminbot.inbound;
 
-import jakarta.annotation.PostConstruct;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,13 +12,13 @@ import org.example.illuminatiadminbot.outbound.model.GroupUser;
 import org.example.illuminatiadminbot.outbound.model.MinioFileDetail;
 import org.example.illuminatiadminbot.service.AdminBotService;
 import org.example.illuminatiadminbot.service.SupergroupService;
-import org.example.illuminatiadminbot.service.TelegramDebugRunner;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.longpolling.interfaces.LongPollingUpdateConsumer;
 import org.telegram.telegrambots.longpolling.starter.SpringLongPollingBot;
 import org.telegram.telegrambots.longpolling.util.LongPollingSingleThreadUpdateConsumer;
 import org.telegram.telegrambots.meta.api.methods.GetFile;
+import org.telegram.telegrambots.meta.api.methods.groupadministration.ExportChatInviteLink;
 import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMember;
 import org.telegram.telegrambots.meta.api.methods.groupadministration.PromoteChatMember;
 import org.telegram.telegrambots.meta.api.methods.send.SendDocument;
@@ -30,7 +29,6 @@ import org.telegram.telegrambots.meta.api.objects.File;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.User;
-import org.telegram.telegrambots.meta.api.objects.chat.Chat;
 import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMember;
 import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
@@ -63,51 +61,40 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
     private String token;
 
     @Value("${supergroup.id}")
-    private Long supergroupId;
+    private long supergroupId;
 
     @Value("${chat.id}")
-    private Long chatId;
+    private long supergroupChatId;
 
     @Override
     public void consume(Update update) {
+
+        //проверка на входе
+//        User from = update.hasMessage()
+//                ? update.getMessage().getFrom()
+//                : update.getCallbackQuery().getFrom();
+//        Set<Long> allowed = Set.copyOf(adminBotService.getAllAdminOrCreatorIds());
+//        long adminId = from.getId();
+//        if (adminId <= 0L || !allowed.contains(adminId)) {
+//            System.out.println("Попытка незарегистрированного входа. Пользователь: " + from.getUserName() + ", ID: " + from.getId());
+//            // просто выходим — дальше код не выполнится
+//            return;
+//        }
+
         String text = "";
         String data = "";
-
-        User from = update.hasMessage()
-                ? update.getMessage().getFrom()
-                : update.getCallbackQuery().getFrom();
-
-        Set<String> allowed = Set.of("reanimatthew", "hehekge");
-        String adminNickname = from.getUserName();
-        if (adminNickname == null || !allowed.contains(adminNickname.toLowerCase())) {
-            System.out.println("Попытка незарегистрированного входа. Пользователь: " + from.getUserName() + ", ID: " + from.getId());
-            // просто выходим — дальше код не выполнится
-            return;
-        }
+        Long chatId = update.hasMessage()
+                ? update.getMessage().getChatId()
+                : update.getCallbackQuery().getMessage().getChatId();
+        ConversationContext ctx = contextMap.computeIfAbsent(chatId, _ -> new ConversationContext());
+        if (ctx.chatId == null)
+            ctx.chatId = chatId;
 
         // сохраняем chatId приватного чата
         if (update.hasMessage()) {
-            Chat chat = update.getMessage().getChat();
-            if (!chat.isSuperGroupChat()) {
-                String nickname = update.getMessage().getFrom().getUserName();
-                adminBotService.saveChatId(nickname, chat.getId());
-            }
-        }
-
-        // TODO перенести в UpdateSqlTelegramBot
-        // метод скачивает администраторов из группы и обновляет Postgres
-        if (update.hasMessage() && update.getMessage().hasText()) {
-            if (update.getMessage().getText().equals("/initializeThisBeautifulBot")) {
-                String message = adminBotService.loadUsers();
-                SendMessage sendMessage = SendMessage.builder()
-                        .chatId(update.getMessage().getChatId())
-                        .text(message)
-                        .build();
-                try {
-                    telegramClient.execute(sendMessage);
-                } catch (TelegramApiException e) {
-                    throw new RuntimeException(e);
-                }
+            if (chatId != supergroupChatId) {
+                long telegramId = update.getMessage().getFrom().getId();
+                adminBotService.saveChatId(telegramId, ctx.chatId);
             }
         }
 
@@ -122,32 +109,21 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                         .chatId(update.getMessage().getChatId())
                         .text(stringBuilder.toString())
                         .build();
-                try {
-                    telegramClient.execute(sendMessage);
-                } catch (TelegramApiException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-        }
-
-        if (update.hasMessage() && update.getMessage().hasText()) {
-            String message = "";
-            if (update.getMessage().getText().equals("/correctSql")) {
-                message = supergroupService.correctSql();
-                SendMessage sendMessage = SendMessage.builder()
-                        .chatId(update.getMessage().getChatId())
-                        .text(message)
-                        .build();
-
                 telegramGateway.safeExecute(sendMessage);
             }
         }
 
-        Long chatId = update.hasMessage()
-                ? update.getMessage().getChatId()
-                : update.getCallbackQuery().getMessage().getChatId();
+        if (update.hasMessage() && update.getMessage().hasText()) {
+            if (update.getMessage().getText().equals("/correctSql")) {
+                String message = supergroupService.correctSql();
+                SendMessage sendMessage = SendMessage.builder()
+                        .chatId(update.getMessage().getChatId())
+                        .text(message)
+                        .build();
+                telegramGateway.safeExecute(sendMessage);
+            }
+        }
 
-        ConversationContext ctx = contextMap.computeIfAbsent(chatId, _ -> new ConversationContext());
 
         if (update.hasMessage() && update.getMessage().hasText()) {
             text = update.getMessage().getText();
@@ -163,7 +139,6 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                 return;
             }
         }
-
 
         if (update.hasCallbackQuery()) {
             data = update.getCallbackQuery().getData();
@@ -223,9 +198,9 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                     ctx.subscriptionDetails.set(1, data);
                     ctx.subscriptionDetails.set(2, "");
                     ctx.menuState = MenuState.NICK_OR_PHONE_MENU;
-//                    InlineKeyboardMarkup markup = menuBuilder.getNickOrPhone(update);
-//                    EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Подписка: " + ctx.subscriptionDetails.get(0) + "\nCрок: " + ctx.subscriptionDetails.get(1) + "\nБудете вводить nickname или телефон подписчика?");
-//                    safeExecute(editMessage);
+                    InlineKeyboardMarkup markup = menuBuilder.getNickOrPhone(update);
+                    EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Подписка: " + ctx.subscriptionDetails.get(0) + "\nCрок: " + ctx.subscriptionDetails.get(1) + "\nБудете вводить nickname или телефон подписчика?");
+                    safeExecute(editMessage);
                 } else if ("BACK-TO-SUBSCRIPTION".equals(data)) {
                     ctx.subscriptionDetails.set(0, "");
                     ctx.subscriptionDetails.set(1, "");
@@ -238,7 +213,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
             }
 
             case NICK_OR_PHONE_MENU -> {
-                if (List.of("BY-PHONE","BY-NICK").contains(data)) {
+                if (List.of("BY-PHONE", "BY-NICK").contains(data)) {
                     ctx.subscriptionDetails.set(2, data);
                     ctx.menuState = MenuState.SUBSCRIBER_ID_MENU;
                     InlineKeyboardMarkup markup = menuBuilder.getSubscriberId(update);
@@ -256,20 +231,72 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
 
             case SUBSCRIBER_ID_MENU -> {
                 if (!text.isEmpty()) {
-                    String subscription = "";
+                    GroupUser groupUser;
+                    String message = "";
                     if (ctx.subscriptionDetails.get(2).equals("BY-NICK")) {
                         text = text.trim();
+
                         if (text.startsWith("@")) {
                             text = text.substring(1);
                         }
-                        subscription = adminBotService.subscribeUser(text, ctx.subscriptionDetails);
+                        groupUser = adminBotService.subscribeUser(text, -1L, ctx.subscriptionDetails);
+                        // работа с супергруппой
+                        if (!groupUser.isMember()) {
+                            message = "Пользователь: " + text + " уже администратор или создатель.";
+                        }
+                        if (groupUser.getTelegramId() > 0 && supergroupService.isMemberInSupergroup(groupUser.getTelegramId()) && !groupUser.isActive()) {
+                            telegramGateway.unbanUser(groupUser);
+                            message = "Пользователь: " + text + " разблокирован.\nПодписка: " + ctx.subscriptionDetails.get(0) + ", на срок: " + ctx.subscriptionDetails.get(1);
+                        } else if (groupUser.getTelegramId() > 0 && !supergroupService.isMemberInSupergroup(groupUser.getTelegramId())) {
+                            supergroupService.addUserToSupergroup(groupUser);
+                            message = "Пользователю: " + text + " подписка продлена/изменена: " + ctx.subscriptionDetails.get(0) + ", на срок: " + ctx.subscriptionDetails.get(1);
+                        } else {
+                            ExportChatInviteLink exportChatInviteLink = ExportChatInviteLink.builder()
+                                    .chatId(chatId)
+                                    .build();
+                            String inviteLink = telegramGateway.safeExecute(exportChatInviteLink);
+
+                            SendMessage sendMessage = SendMessage.builder()
+                                    .chatId(update.getMessage().getChatId())
+                                    .text("Следующим сообщением будет ссылка, перешлите её подписчику.")
+                                    .build();
+                            telegramGateway.safeExecute(sendMessage);
+
+                            clearMenu(update, ctx.lastMessageId, inviteLink);
+                        }
                     } else if (ctx.subscriptionDetails.get(2).equals("BY-PHONE")) {
                         String phone = phoneValidatorAndNormalizer.validateAndNormalize(text);
-//                        supergroupService.addUserToSupergroup()
+                        long telegramId = supergroupService.getTelegramIdByPhone(phone);
+                        String nickname = supergroupService.getNicknameByTelegramId(telegramId);
+                        groupUser = adminBotService.subscribeUser(nickname, telegramId, ctx.subscriptionDetails);
 
+                        // работа с супергруппой
+                        if (!groupUser.isMember()) {
+                            message = "Пользователь: " + text + " уже администратор или создатель.";
+                        }
+                        if (groupUser.getTelegramId() > 0 && supergroupService.isMemberInSupergroup(groupUser.getTelegramId()) && !groupUser.isActive()) {
+                            telegramGateway.unbanUser(groupUser);
+                            message = "Пользователь: " + text + " разблокирован.\nПодписка: " + ctx.subscriptionDetails.get(0) + ", на срок: " + ctx.subscriptionDetails.get(1);
+                        } else if (groupUser.getTelegramId() > 0 && !supergroupService.isMemberInSupergroup(groupUser.getTelegramId())) {
+                            supergroupService.addUserToSupergroup(groupUser);
+                            message = "Пользователю: " + text + " подписка продлена/изменена: " + ctx.subscriptionDetails.get(0) + ", на срок: " + ctx.subscriptionDetails.get(1);
+                        } else {
+                            ExportChatInviteLink exportChatInviteLink = ExportChatInviteLink.builder()
+                                    .chatId(chatId)
+                                    .build();
+                            String inviteLink = telegramGateway.safeExecute(exportChatInviteLink);
+
+                            SendMessage sendMessage = SendMessage.builder()
+                                    .chatId(update.getMessage().getChatId())
+                                    .text("Следующим сообщением будет ссылка, перешлите её подписчику.")
+                                    .build();
+                            telegramGateway.safeExecute(sendMessage);
+
+                            clearMenu(update, ctx.lastMessageId, inviteLink);
+                        }
                     }
 
-                    clearMenu(update, ctx.lastMessageId, subscription);
+                    clearMenu(update, ctx.lastMessageId, message);
                 } else if ("BACK-TO-DURATION".equals(data)) {
                     ctx.subscriptionDetails.set(1, "");
                     ctx.menuState = MenuState.DURATION_MENU;
@@ -606,5 +633,6 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
         private UploadDetails uploadDetails = new UploadDetails();
         private MenuState menuState = MenuState.MAIN_MENU;
         private Integer lastMessageId = null;
+        private Long chatId = null;
     }
 }

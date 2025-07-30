@@ -128,6 +128,31 @@ public class SupergroupService {
         return GroupUser.createNewMember(telegramId, nickname);
     }
 
+    public void addUserToSupergroup(GroupUser groupUser) {
+
+        if (getGroupUserById(groupUser.getTelegramId()) == null) {
+            TdApi.AddChatMember inviteRequest = new TdApi.AddChatMember(
+                    chatId,
+                    groupUser.getTelegramId(),
+                    0
+            );
+
+            try {
+                simpleTelegramClient.send(inviteRequest).get();
+            } catch (InterruptedException | ExecutionException e) {
+                throw new RuntimeException(e);
+            }
+
+            TdApi.RemoveContacts removeRequest = new TdApi.RemoveContacts(new long[]{groupUser.getTelegramId()});
+
+            try {
+                simpleTelegramClient.send(removeRequest).get();
+            } catch (InterruptedException | ExecutionException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
     private List<Long> getAllAdminIdsFromSupergroup() {
 
         List<Long> adminIds = new ArrayList<>();
@@ -199,7 +224,7 @@ public class SupergroupService {
 
         return switch (telegramUserStatus) {
             case CREATOR -> GroupUser.createNewCreator(telegramId, nickname);
-            case ADMINISTRATOR ->  GroupUser.createNewAdministrator(telegramId, nickname);
+            case ADMINISTRATOR -> GroupUser.createNewAdministrator(telegramId, nickname);
             case MEMBER -> GroupUser.createNewMember(telegramId, nickname);
             default -> throw new RuntimeException("Unknown TelegramUserStatus: " + telegramUserStatus);
         };
@@ -420,4 +445,35 @@ public class SupergroupService {
         // Берём ID первого (и единственного) импортированного пользователя
         return imported.userIds[0];
     }
+
+    public boolean isMemberInSupergroup(long telegramId) {
+        CompletableFuture<TdApi.ChatMember> future =
+                simpleTelegramClient.send(
+                        new TdApi.GetChatMember(chatId, new TdApi.MessageSenderUser(telegramId))
+                );
+        TdApi.ChatMember member;
+        try {
+            member = future.get(5, TimeUnit.SECONDS);
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof TelegramError te &&
+                    te.getError().code == 400 &&
+                    "Member not found".equals(te.getError().message)) {
+                return false;
+            }
+            log.error("Ошибка при проверке вхождения {} в супергруппу", telegramId, e);
+            throw new RuntimeException(e);
+        } catch (TimeoutException e) {
+            log.warn("Таймаут при проверке вхождения {} в супергруппу", telegramId);
+            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e);
+        }
+        // Если хотите считать бан «не в группе», раскомментируйте:
+        // if (member.status instanceof TdApi.ChatMemberStatusBanned) return false;
+        return true;
+    }
+
+
 }

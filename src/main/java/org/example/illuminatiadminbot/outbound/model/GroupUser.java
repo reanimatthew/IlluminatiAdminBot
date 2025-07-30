@@ -70,6 +70,10 @@ public class GroupUser {
         return status == UserStatus.ACTIVE;
     }
 
+    public boolean isMember() {
+        return telegramUserStatus == TelegramUserStatus.MEMBER;
+    }
+
     public static GroupUser createNewMember(long telegramId, String nickname) {
         return GroupUser.builder()
                 .telegramId(telegramId)

@@ -52,11 +52,11 @@ public class TelegramDebugRunner {
         } catch (ExecutionException ee) {
             Throwable cause = ee.getCause();
 
-            //  ✅ Правильный тип исключения
+            //  Правильный тип исключения
             if (cause instanceof TelegramError tgErr) {
                 TdApi.Error err = tgErr.getError();     // сам объект TdApi.Error
                 log.warn("TdApi.Error: code={} message='{}'",
-                        err.code, err.message);        // :contentReference[oaicite:1]{index=1}
+                        err.code, err.message);
             } else {
                 log.error("ExecutionException при GetChatMember", ee);
             }

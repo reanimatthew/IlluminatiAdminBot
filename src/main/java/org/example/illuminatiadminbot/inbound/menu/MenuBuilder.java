@@ -283,6 +283,29 @@ public class MenuBuilder {
                 .build();
     }
 
-//    public InlineKeyboardMarkup getNickOrPhone(Update update) {
-//    }
+    public InlineKeyboardMarkup getNickOrPhone(Update update) {
+
+        InlineKeyboardButton btn1 = InlineKeyboardButton.builder()
+                .text("Телефон")
+                .callbackData("BY-PHONE")
+                .build();
+
+        InlineKeyboardButton btn2 = InlineKeyboardButton.builder()
+                .text("Никнейм")
+                .callbackData("BY-NICK")
+                .build();
+
+        InlineKeyboardButton btn3 = InlineKeyboardButton.builder()
+                .text("← Назад")
+                .callbackData("BACK-TO-DURATION")
+                .build();
+
+        InlineKeyboardRow row1 = new InlineKeyboardRow(btn1, btn2);
+        InlineKeyboardRow row2 = new InlineKeyboardRow(btn3);
+
+        return InlineKeyboardMarkup.builder()
+                .keyboardRow(row1)
+                .keyboardRow(row2)
+                .build();
+    }
 }

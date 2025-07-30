@@ -4,7 +4,6 @@ import io.minio.*;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FilenameUtils;
-import org.example.illuminatiadminbot.inbound.model.SupergroupTopic;
 import org.example.illuminatiadminbot.inbound.model.UploadDetails;
 import org.example.illuminatiadminbot.outbound.model.MinioFileNameDetail;
 import org.springframework.stereotype.Service;
