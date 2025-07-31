@@ -1,11 +1,13 @@
 package org.example.illuminatiadminbot.inbound;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.illuminatiadminbot.outbound.model.GroupUser;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.methods.botapimethods.BotApiMethod;
 import org.telegram.telegrambots.meta.api.methods.groupadministration.BanChatMember;
+import org.telegram.telegrambots.meta.api.methods.groupadministration.RestrictChatMember;
 import org.telegram.telegrambots.meta.api.methods.groupadministration.UnbanChatMember;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
@@ -14,18 +16,16 @@ import java.io.Serializable;
 
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class TelegramGateway {
     private final TelegramClient telegramClient;
+    private final ChatPermissionsFabric chatPermissionsFabric;
 
     @Value("${supergroup.id}")
     private Long supergroupId;
 
     @Value("${chat.id}")
-    private Long chatId;
-
-    public TelegramGateway(TelegramClient telegramClient) {
-        this.telegramClient = telegramClient;
-    }
+    private Long superGroupChatId;
 
     public <R extends Serializable> R safeExecute(BotApiMethod<R> apiMethod) {
         try {
@@ -35,45 +35,38 @@ public class TelegramGateway {
         }
     }
 
-//    public Message safeExecute(SendMessage menuMessage) {
-//        Message message;
-//        try {
-//            message = telegramClient.execute(menuMessage);
-//        } catch (TelegramApiException e) {
-//            throw new RuntimeException(e);
-//        }
-//        return message;
-//    }
-//
-//    public void safeExecute(EditMessageText editMessage) {
-//        try {
-//            telegramClient.execute(editMessage);
-//        } catch (TelegramApiException e) {
-//            throw new RuntimeException(e);
-//        }
-//    }
-
     public void banUser(GroupUser groupUser) {
         BanChatMember banChatMember = BanChatMember.builder()
-                .chatId(chatId)
+                .chatId(superGroupChatId)
                 .userId(groupUser.getTelegramId())
                 .build();
         safeExecute(banChatMember);
         UnbanChatMember unbanChatMember = UnbanChatMember.builder()
-                .chatId(chatId)
+                .chatId(superGroupChatId)
                 .userId(groupUser.getTelegramId())
                 .build();
         // это нужно просто для выбрасывания из группы, а не длительной блокировки
         safeExecute(unbanChatMember);
     }
 
-    public void unbanUser(GroupUser groupUser) {
-        UnbanChatMember unbanChatMember = UnbanChatMember.builder()
-                .chatId(chatId)
-                .userId(groupUser.getTelegramId())
-                .build();
+    public void restoreBannedOrRestrictedUser(GroupUser groupUser) {
 
-        safeExecute(unbanChatMember);
+        switch (groupUser.getTelegramUserStatus()) {
+            case BANNED -> safeExecute(
+                    UnbanChatMember.builder()
+                            .chatId(superGroupChatId)
+                            .userId(groupUser.getTelegramId())
+                            .build()
+            );
+
+            case RESTRICTED -> {
+                RestrictChatMember restrictChatMember = RestrictChatMember.builder()
+                        .chatId(superGroupChatId)
+                        .userId(groupUser.getTelegramId())
+                        .permissions(chatPermissionsFabric.getStandard())
+                        .build();
+                safeExecute(restrictChatMember);
+            }
+        }
     }
-
 }

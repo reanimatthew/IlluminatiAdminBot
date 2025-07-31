@@ -7,7 +7,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.illuminatiadminbot.inbound.menu.Subscription;
 import org.example.illuminatiadminbot.inbound.model.TelegramUserStatus;
-import org.example.illuminatiadminbot.inbound.model.UserStatus;
 import org.example.illuminatiadminbot.mapper.ChatMemberStatusMapper;
 import org.example.illuminatiadminbot.outbound.model.GroupUser;
 import org.example.illuminatiadminbot.outbound.repository.GroupUserRepository;
@@ -35,63 +34,9 @@ public class SupergroupService {
     private Long supergroupId;
 
     @Value("${chat.id}")
-    private Long chatId;
+    private Long supergroupChatId;
 
-    public Map<Long, String> getAllMembers() {
-
-        List<TdApi.ChatMember> allMembers = new ArrayList<>();
-        int offset = 0;
-        int limit = 200;
-
-        while (true) {
-            CompletableFuture<TdApi.ChatMembers> future = simpleTelegramClient.send(
-                    new TdApi.GetSupergroupMembers(
-                            supergroupId,
-                            new TdApi.SupergroupMembersFilterRecent(),
-                            offset,
-                            limit
-                    )
-            );
-
-            TdApi.ChatMembers chunk;
-            try {
-                chunk = future.get(30, TimeUnit.SECONDS);
-            } catch (InterruptedException | ExecutionException | TimeoutException e) {
-                throw new RuntimeException(e);
-            }
-
-            Collections.addAll(allMembers, chunk.members);
-            if (chunk.members.length < limit)
-                break;
-            offset += chunk.members.length;
-        }
-
-        Map<Long, String> existingUsers = new HashMap<>();
-        for (TdApi.ChatMember chatMember : allMembers) {
-            TdApi.MessageSenderUser messageSenderUser = (TdApi.MessageSenderUser) chatMember.memberId;
-            Long telegramId = messageSenderUser.userId;
-
-            TdApi.User user;
-            try {
-                user = simpleTelegramClient
-                        .send(new TdApi.GetUser(messageSenderUser.userId))      // отправили запрос
-                        .get(5, TimeUnit.SECONDS);
-            } catch (InterruptedException | ExecutionException | TimeoutException e) {
-                log.warn("Не удалось получить info по пользователю {}", telegramId, e);
-                continue;
-            }
-
-            String username = "";
-            if (user.usernames != null && user.usernames.editableUsername != null) {
-                username = user.usernames.editableUsername;
-            }
-            existingUsers.put(telegramId, username);
-        }
-
-        return existingUsers;
-    }
-
-    public GroupUser addUserToSupergroup(String phone) {
+    public GroupUser addMemberToSupergroup(String phone) {
 
         long telegramId = getTelegramIdByPhone(phone);
 
@@ -106,7 +51,7 @@ public class SupergroupService {
             return existUser;
 
         TdApi.AddChatMember inviteRequest = new TdApi.AddChatMember(
-                chatId,
+                supergroupChatId,
                 telegramId,
                 0
         );
@@ -125,14 +70,14 @@ public class SupergroupService {
             throw new RuntimeException(e);
         }
 
-        return GroupUser.createNewMember(telegramId, nickname);
+        return GroupUser.createNewUser(TelegramUserStatus.MEMBER, telegramId, nickname);
     }
 
-    public void addUserToSupergroup(GroupUser groupUser) {
+    public void addMemberToSupergroup(GroupUser groupUser) {
 
         if (getGroupUserById(groupUser.getTelegramId()) == null) {
             TdApi.AddChatMember inviteRequest = new TdApi.AddChatMember(
-                    chatId,
+                    supergroupChatId,
                     groupUser.getTelegramId(),
                     0
             );
@@ -153,157 +98,10 @@ public class SupergroupService {
         }
     }
 
-    private List<Long> getAllAdminIdsFromSupergroup() {
-
-        List<Long> adminIds = new ArrayList<>();
-
-        List<TdApi.ChatMember> allMembers = new ArrayList<>();
-        int offset = 0;
-        int limit = 200;
-
-        while (true) {
-            CompletableFuture<TdApi.ChatMembers> future = simpleTelegramClient.send(
-                    new TdApi.GetSupergroupMembers(
-                            supergroupId,
-                            new TdApi.SupergroupMembersFilterRecent(),
-                            offset,
-                            limit
-                    )
-            );
-
-            TdApi.ChatMembers chunk;
-            try {
-                chunk = future.get(30, TimeUnit.SECONDS);
-            } catch (InterruptedException | ExecutionException | TimeoutException e) {
-                throw new RuntimeException(e);
-            }
-
-            Collections.addAll(allMembers, chunk.members);
-            if (chunk.members.length < limit)
-                break;
-            offset += chunk.members.length;
-        }
-
-        for (TdApi.ChatMember chatMember : allMembers) {
-            TdApi.MessageSenderUser messageSenderUser = (TdApi.MessageSenderUser) chatMember.memberId;
-            adminIds.add(messageSenderUser.userId);
-        }
-
-        return adminIds;
-    }
-
-    public GroupUser getGroupUserById(long telegramId) {
-
-        // проверяем наличие юзера в группе
-        TdApi.ChatMember chatMember = null;
-        try {
-            chatMember = simpleTelegramClient.send(
-                    new TdApi.GetChatMember(
-                            chatId,
-                            new TdApi.MessageSenderUser(telegramId)
-                    )
-            ).get();
-        } catch (ExecutionException e) {
-            // этот код ловит отсутствие юзера в группе
-            Throwable cause = e.getCause();
-            if (cause instanceof TelegramError telegramError) {
-                TdApi.Error error = telegramError.getError();
-                if (error.code == 400 && "Member not found".equals(error.message)) {
-                    return null;
-                }
-            } else {
-                throw new RuntimeException(e);
-            }
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
-
-        String nickname = getNicknameByTelegramId(telegramId);
-
-        TelegramUserStatus telegramUserStatus = chatMemberStatusMapper.simplifyStatus(chatMember.status);
-
-        return switch (telegramUserStatus) {
-            case CREATOR -> GroupUser.createNewCreator(telegramId, nickname);
-            case ADMINISTRATOR -> GroupUser.createNewAdministrator(telegramId, nickname);
-            case MEMBER -> GroupUser.createNewMember(telegramId, nickname);
-            default -> throw new RuntimeException("Unknown TelegramUserStatus: " + telegramUserStatus);
-        };
-    }
-
-    public List<GroupUser> getAllGroupUsers() {
-        List<GroupUser> groupUsers = new ArrayList<>();
-        List<TdApi.ChatMember> allMembers = new ArrayList<>();
-        int offset = 0;
-        int limit = 200;
-        while (true) {
-            CompletableFuture<TdApi.ChatMembers> future = simpleTelegramClient.send(
-                    new TdApi.GetSupergroupMembers(
-                            supergroupId,
-                            new TdApi.SupergroupMembersFilterRecent(),
-                            offset,
-                            limit
-                    )
-            );
-
-            TdApi.ChatMembers chunk;
-            try {
-                chunk = future.get(30, TimeUnit.SECONDS);
-            } catch (InterruptedException | ExecutionException | TimeoutException e) {
-                throw new RuntimeException(e);
-            }
-
-            Collections.addAll(allMembers, chunk.members);
-            if (chunk.members.length < limit)
-                break;
-            offset += chunk.members.length;
-        }
-
-        GroupUser groupUser;
-        for (TdApi.ChatMember chatMember : allMembers) {
-            TdApi.MessageSenderUser messageSenderUser = (TdApi.MessageSenderUser) chatMember.memberId;
-            groupUser = getGroupUserById(messageSenderUser.userId);
-            groupUsers.add(groupUser);
-        }
-
-        return groupUsers;
-    }
-
-    public GroupUser activateGroupUserById(long userId, TelegramUserStatus telegramUserStatus) {
-
-        // проверяем, есть ли такой пользователь в БД
-        Optional<GroupUser> groupUserOptional = groupUserRepository.findByTelegramId(userId);
-        if (groupUserOptional.isPresent()) {
-            GroupUser groupUser = groupUserOptional.get();
-            groupUser.setStatus(UserStatus.ACTIVE);
-            groupUser.setTelegramUserStatus(telegramUserStatus);
-            return groupUser;
-        }
-
-        TdApi.User user;
-
-        try {
-            user = simpleTelegramClient.send(new TdApi.GetUser(userId)).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new RuntimeException(e);
-        }
-
-        String nickname = "";
-        if (user.usernames != null && user.usernames.editableUsername != null) {
-            nickname = user.usernames.editableUsername;
-        }
-
-        return GroupUser.builder()
-                .telegramId(userId)
-                .nickname(nickname)
-                .telegramUserStatus(telegramUserStatus)
-                .status(UserStatus.ACTIVE)
-                .build();
-    }
-
     public boolean banUser(String nickname) {
 
-        Long userId = getAllMembers().entrySet().stream()
-                .filter(e -> Objects.equals(e.getValue(), nickname))
+        Long userId = toMap(getAllGroupUsers()).entrySet().stream()
+                .filter(e -> Objects.equals(e.getValue().getNickname(), nickname))
                 .map(Map.Entry::getKey)
                 .findFirst()
                 .orElse(null);
@@ -312,7 +110,7 @@ public class SupergroupService {
             return false;
 
         TdApi.BanChatMember banRequest = new TdApi.BanChatMember(
-                chatId,
+                supergroupChatId,
                 new TdApi.MessageSenderUser(userId),
                 0,
                 true
@@ -375,6 +173,52 @@ public class SupergroupService {
         return result.toString();
     }
 
+    public List<GroupUser> getFilteredGroupUsers(TdApi.SupergroupMembersFilter type) {
+        List<GroupUser> groupUsers = new ArrayList<>();
+        List<TdApi.ChatMember> allMembers = new ArrayList<>();
+        int offset = 0;
+        int limit = 200;
+        while (true) {
+            CompletableFuture<TdApi.ChatMembers> future = simpleTelegramClient.send(
+                    new TdApi.GetSupergroupMembers(
+                            supergroupId,
+                            type,
+                            offset,
+                            limit
+                    )
+            );
+
+            TdApi.ChatMembers chunk;
+            try {
+                chunk = future.get(30, TimeUnit.SECONDS);
+            } catch (InterruptedException | ExecutionException | TimeoutException e) {
+                throw new RuntimeException(e);
+            }
+
+            Collections.addAll(allMembers, chunk.members);
+            if (chunk.members.length < limit)
+                break;
+            offset += chunk.members.length;
+        }
+
+        GroupUser groupUser;
+        for (TdApi.ChatMember chatMember : allMembers) {
+            TdApi.MessageSenderUser messageSenderUser = (TdApi.MessageSenderUser) chatMember.memberId;
+            groupUser = getGroupUserById(messageSenderUser.userId);
+            groupUsers.add(groupUser);
+        }
+
+        return groupUsers;
+    }
+
+    public List<GroupUser> getAllGroupUsers() {
+        Map<Long, GroupUser> groupUserMap = new HashMap<>();
+        for (TdApi.SupergroupMembersFilter userType : SupergroupMemberFilterFactory.getAll()) {
+            groupUserMap.putAll(toMap(getFilteredGroupUsers(userType)));
+        }
+        return new ArrayList<>(groupUserMap.values());
+    }
+
     public List<GroupUser> findGroupUsersNotInSql() {
 
         List<GroupUser> fromSupergroup = getAllGroupUsers();
@@ -401,6 +245,39 @@ public class SupergroupService {
                 .filter(groupUser -> !telegramIdsFromSupergroup.contains(groupUser.getTelegramId()))
                 .toList();
 
+    }
+
+    public GroupUser getGroupUserById(long telegramId) {
+
+        // проверяем наличие юзера в группе
+        TdApi.ChatMember chatMember = null;
+        try {
+            chatMember = simpleTelegramClient.send(
+                    new TdApi.GetChatMember(
+                            supergroupChatId,
+                            new TdApi.MessageSenderUser(telegramId)
+                    )
+            ).get();
+        } catch (ExecutionException e) {
+            // этот код ловит отсутствие юзера в группе
+            Throwable cause = e.getCause();
+            if (cause instanceof TelegramError telegramError) {
+                TdApi.Error error = telegramError.getError();
+                if (error.code == 400 && "Member not found".equals(error.message)) {
+                    return null;
+                }
+            } else {
+                throw new RuntimeException(e);
+            }
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+
+        String nickname = getNicknameByTelegramId(telegramId);
+
+        TelegramUserStatus telegramUserStatus = chatMemberStatusMapper.simplifyStatus(chatMember.status);
+
+        return GroupUser.createNewUser(telegramUserStatus, telegramId, nickname);
     }
 
     public String getNicknameByTelegramId(long telegramId) {
@@ -446,10 +323,10 @@ public class SupergroupService {
         return imported.userIds[0];
     }
 
-    public boolean isMemberInSupergroup(long telegramId) {
+    public boolean isOrdinaryMember(long telegramId) {
         CompletableFuture<TdApi.ChatMember> future =
                 simpleTelegramClient.send(
-                        new TdApi.GetChatMember(chatId, new TdApi.MessageSenderUser(telegramId))
+                        new TdApi.GetChatMember(supergroupChatId, new TdApi.MessageSenderUser(telegramId))
                 );
         TdApi.ChatMember member;
         try {
@@ -471,9 +348,35 @@ public class SupergroupService {
             throw new RuntimeException(e);
         }
         // Если хотите считать бан «не в группе», раскомментируйте:
-        // if (member.status instanceof TdApi.ChatMemberStatusBanned) return false;
-        return true;
+        return member.status instanceof TdApi.ChatMemberStatusMember;
     }
 
+    public Map<Long, GroupUser> toMap(List<GroupUser> users) {
+        Map<Long, GroupUser> groupUserMap = new HashMap<>();
+        for (GroupUser groupUser : users) {
+            groupUserMap.put(groupUser.getTelegramId(), groupUser);
+        }
+        return groupUserMap;
+    }
+
+    public boolean inSupergroup(String nickname) {
+        List<GroupUser> groupUsers = getAllGroupUsers();
+        for (GroupUser groupUser : groupUsers) {
+            if (Objects.equals(groupUser.getNickname(), nickname)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public GroupUser getGroupUserByNickname(String nickname) {
+        List<GroupUser> groupUsers = getAllGroupUsers();
+        for (GroupUser groupUser : groupUsers) {
+            if (Objects.equals(groupUser.getNickname(), nickname)) {
+                return groupUser;
+            }
+        }
+        throw new RuntimeException("SupergroupService.getGroupUserByNickname: почему-то не найден по нику");
+    }
 
 }

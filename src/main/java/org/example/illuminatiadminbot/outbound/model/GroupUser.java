@@ -5,7 +5,6 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 import org.example.illuminatiadminbot.inbound.menu.Subscription;
 import org.example.illuminatiadminbot.inbound.model.TelegramUserStatus;
-import org.example.illuminatiadminbot.inbound.model.UserStatus;
 
 import java.time.LocalDate;
 
@@ -43,16 +42,12 @@ public class GroupUser {
     LocalDate subscriptionExpiration;
 
     @Column
-    @Enumerated(EnumType.STRING)
-    UserStatus status;
-
-    @Column
     Long chatId;
 
     public String toStringSupergroup() {
         return "telegramId=" + telegramId +
-                ", \nnickname='" + nickname + '\'' +
-                ", \ntelegramUserStatus='" + telegramUserStatus + '\'' +
+                " \nnickname=" + nickname +
+                " \ntelegramUserStatus=" + telegramUserStatus +
                 "\n";
     }
 
@@ -67,46 +62,71 @@ public class GroupUser {
     }
 
     public boolean isActive() {
-        return status == UserStatus.ACTIVE;
+        return telegramUserStatus == TelegramUserStatus.CREATOR
+                || telegramUserStatus == TelegramUserStatus.ADMINISTRATOR
+                || telegramUserStatus == TelegramUserStatus.MEMBER;
     }
 
     public boolean isMember() {
         return telegramUserStatus == TelegramUserStatus.MEMBER;
     }
 
-    public static GroupUser createNewMember(long telegramId, String nickname) {
-        return GroupUser.builder()
-                .telegramId(telegramId)
-                .nickname(nickname)
-                .telegramUserStatus(TelegramUserStatus.MEMBER)
-                .subscriptionType(Subscription.TEMP)
-                .subscriptionDuration(1)
-                .subscriptionExpiration(LocalDate.now().plusMonths(1))
-                .status(UserStatus.ACTIVE)
-                .build();
+    public boolean isAdminOrCreator() {
+        return telegramUserStatus == TelegramUserStatus.CREATOR || telegramUserStatus == TelegramUserStatus.ADMINISTRATOR;
     }
 
-    public static GroupUser createNewAdministrator(long telegramId, String nickname) {
-        return GroupUser.builder()
-                .telegramId(telegramId)
-                .nickname(nickname)
-                .telegramUserStatus(TelegramUserStatus.ADMINISTRATOR)
-                .subscriptionType(Subscription.ADMIN)
-                .subscriptionDuration(12 * 5)
-                .subscriptionExpiration(LocalDate.now().plusYears(5))
-                .status(UserStatus.ACTIVE)
-                .build();
-    }
+    public static GroupUser createNewUser(TelegramUserStatus telegramUserStatus, long telegramId, String nickname) {
+        return switch (telegramUserStatus) {
+            case CREATOR -> builder()
+                    .telegramId(telegramId)
+                    .nickname(nickname)
+                    .telegramUserStatus(TelegramUserStatus.CREATOR)
+                    .subscriptionType(Subscription.CREATOR)
+                    .subscriptionDuration(12 * 20)
+                    .subscriptionExpiration(LocalDate.now().plusYears(20))
+                    .build();
 
-    public static GroupUser createNewCreator(long telegramId, String nickname) {
-        return GroupUser.builder()
-                .telegramId(telegramId)
-                .nickname(nickname)
-                .telegramUserStatus(TelegramUserStatus.CREATOR)
-                .subscriptionType(Subscription.CREATOR)
-                .subscriptionDuration(12 * 20)
-                .subscriptionExpiration(LocalDate.now().plusYears(20))
-                .status(UserStatus.ACTIVE)
-                .build();
+            case ADMINISTRATOR -> builder()
+                    .telegramId(telegramId)
+                    .nickname(nickname)
+                    .telegramUserStatus(TelegramUserStatus.ADMINISTRATOR)
+                    .subscriptionType(Subscription.ADMIN)
+                    .subscriptionDuration(12 * 5)
+                    .subscriptionExpiration(LocalDate.now().plusYears(5))
+                    .build();
+
+            case MEMBER -> builder()
+                    .telegramId(telegramId)
+                    .nickname(nickname)
+                    .telegramUserStatus(TelegramUserStatus.MEMBER)
+                    .subscriptionType(Subscription.TEMP)
+                    .subscriptionDuration(1)
+                    .subscriptionExpiration(LocalDate.now().plusMonths(1))
+                    .build();
+
+            case BANNED -> builder()
+                    .telegramId(telegramId)
+                    .nickname(nickname)
+                    .telegramUserStatus(TelegramUserStatus.BANNED)
+                    .build();
+
+            case RESTRICTED -> builder()
+                    .telegramId(telegramId)
+                    .nickname(nickname)
+                    .telegramUserStatus(TelegramUserStatus.RESTRICTED)
+                    .build();
+
+            case LEFT -> builder()
+                    .telegramId(telegramId)
+                    .nickname(nickname)
+                    .telegramUserStatus(TelegramUserStatus.LEFT)
+                    .build();
+
+            default -> GroupUser.builder()
+                    .telegramId(telegramId)
+                    .nickname(nickname)
+                    .telegramUserStatus(TelegramUserStatus.UNKNOWN)
+                    .build();
+        };
     }
 }

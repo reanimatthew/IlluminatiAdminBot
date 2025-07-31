@@ -7,7 +7,6 @@ import org.example.illuminatiadminbot.configuration.TopicProperties;
 import org.example.illuminatiadminbot.inbound.menu.*;
 import org.example.illuminatiadminbot.inbound.model.TelegramUserStatus;
 import org.example.illuminatiadminbot.inbound.model.UploadDetails;
-import org.example.illuminatiadminbot.inbound.model.UserStatus;
 import org.example.illuminatiadminbot.outbound.model.GroupUser;
 import org.example.illuminatiadminbot.outbound.model.MinioFileDetail;
 import org.example.illuminatiadminbot.service.AdminBotService;
@@ -28,7 +27,6 @@ import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageTe
 import org.telegram.telegrambots.meta.api.objects.File;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Update;
-import org.telegram.telegrambots.meta.api.objects.User;
 import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMember;
 import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
@@ -230,73 +228,92 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
             }
 
             case SUBSCRIBER_ID_MENU -> {
-                if (!text.isEmpty()) {
+                if (!text.isEmpty() && !(text.startsWith("@") && text.length() == 1)) {
                     GroupUser groupUser;
                     String message = "";
-                    if (ctx.subscriptionDetails.get(2).equals("BY-NICK")) {
-                        text = text.trim();
+                    String nickname = "";
+                    String phone = "";
+                    long telegramId = -1L;
+
+                    boolean byNick = ctx.subscriptionDetails.get(2).equals("BY-NICK");
+                    boolean byPhone = ctx.subscriptionDetails.get(2).equals("BY-PHONE");
+                    if (byNick) {
+                        nickname = text.trim();
 
                         if (text.startsWith("@")) {
-                            text = text.substring(1);
+                            nickname = text.substring(1);
                         }
-                        groupUser = adminBotService.subscribeUser(text, -1L, ctx.subscriptionDetails);
-                        // работа с супергруппой
-                        if (!groupUser.isMember()) {
-                            message = "Пользователь: " + text + " уже администратор или создатель.";
+                    } else if (byPhone) {
+                        phone = phoneValidatorAndNormalizer.validateAndNormalize(text);
+                        telegramId = supergroupService.getTelegramIdByPhone(phone);
+                        if (telegramId < 1) {
+                            deleteMenu(update, ctx.lastMessageId);
+                            ctx.menuState = MenuState.SUBSCRIBER_ID_MENU;
+                            InlineKeyboardMarkup markup = menuBuilder.getSubscriberId(update);
+                            SendMessage sendMessage = messageBuilder.createMessage(update, markup, "Пользователя с таким телефоном не существует.\nВведите номер телефона пользователя в формате +79261234567");
+                            ctx.lastMessageId = safeExecute(sendMessage).getMessageId();
+                            return;
                         }
-                        if (groupUser.getTelegramId() > 0 && supergroupService.isMemberInSupergroup(groupUser.getTelegramId()) && !groupUser.isActive()) {
-                            telegramGateway.unbanUser(groupUser);
-                            message = "Пользователь: " + text + " разблокирован.\nПодписка: " + ctx.subscriptionDetails.get(0) + ", на срок: " + ctx.subscriptionDetails.get(1);
-                        } else if (groupUser.getTelegramId() > 0 && !supergroupService.isMemberInSupergroup(groupUser.getTelegramId())) {
-                            supergroupService.addUserToSupergroup(groupUser);
-                            message = "Пользователю: " + text + " подписка продлена/изменена: " + ctx.subscriptionDetails.get(0) + ", на срок: " + ctx.subscriptionDetails.get(1);
-                        } else {
-                            ExportChatInviteLink exportChatInviteLink = ExportChatInviteLink.builder()
-                                    .chatId(chatId)
-                                    .build();
-                            String inviteLink = telegramGateway.safeExecute(exportChatInviteLink);
-
-                            SendMessage sendMessage = SendMessage.builder()
-                                    .chatId(update.getMessage().getChatId())
-                                    .text("Следующим сообщением будет ссылка, перешлите её подписчику.")
-                                    .build();
-                            telegramGateway.safeExecute(sendMessage);
-
-                            clearMenu(update, ctx.lastMessageId, inviteLink);
-                        }
-                    } else if (ctx.subscriptionDetails.get(2).equals("BY-PHONE")) {
-                        String phone = phoneValidatorAndNormalizer.validateAndNormalize(text);
-                        long telegramId = supergroupService.getTelegramIdByPhone(phone);
-                        String nickname = supergroupService.getNicknameByTelegramId(telegramId);
-                        groupUser = adminBotService.subscribeUser(nickname, telegramId, ctx.subscriptionDetails);
-
-                        // работа с супергруппой
-                        if (!groupUser.isMember()) {
-                            message = "Пользователь: " + text + " уже администратор или создатель.";
-                        }
-                        if (groupUser.getTelegramId() > 0 && supergroupService.isMemberInSupergroup(groupUser.getTelegramId()) && !groupUser.isActive()) {
-                            telegramGateway.unbanUser(groupUser);
-                            message = "Пользователь: " + text + " разблокирован.\nПодписка: " + ctx.subscriptionDetails.get(0) + ", на срок: " + ctx.subscriptionDetails.get(1);
-                        } else if (groupUser.getTelegramId() > 0 && !supergroupService.isMemberInSupergroup(groupUser.getTelegramId())) {
-                            supergroupService.addUserToSupergroup(groupUser);
-                            message = "Пользователю: " + text + " подписка продлена/изменена: " + ctx.subscriptionDetails.get(0) + ", на срок: " + ctx.subscriptionDetails.get(1);
-                        } else {
-                            ExportChatInviteLink exportChatInviteLink = ExportChatInviteLink.builder()
-                                    .chatId(chatId)
-                                    .build();
-                            String inviteLink = telegramGateway.safeExecute(exportChatInviteLink);
-
-                            SendMessage sendMessage = SendMessage.builder()
-                                    .chatId(update.getMessage().getChatId())
-                                    .text("Следующим сообщением будет ссылка, перешлите её подписчику.")
-                                    .build();
-                            telegramGateway.safeExecute(sendMessage);
-
-                            clearMenu(update, ctx.lastMessageId, inviteLink);
-                        }
+                        nickname = supergroupService.getNicknameByTelegramId(telegramId);
                     }
 
-                    clearMenu(update, ctx.lastMessageId, message);
+                    boolean inSql = adminBotService.inSql(nickname);
+                    boolean inSupergroup = supergroupService.inSupergroup(nickname);
+                    TelegramUserStatus telegramUserStatus;
+
+                    if (!inSql && !inSupergroup) {
+                        groupUser = adminBotService.subscribeNewUser(nickname, telegramId, ctx.subscriptionDetails);
+
+                        if (byNick) {
+                            sendLink(update, chatId, ctx);
+                        } else if (byPhone) {
+                            supergroupService.addMemberToSupergroup(groupUser);
+                            subscribeAndSendMessage(groupUser, ctx, update);
+                        }
+
+                    } else if (!inSql) {
+                        groupUser = supergroupService.getGroupUserByNickname(nickname);
+
+                        if (!supergroupService.isOrdinaryMember(groupUser.getTelegramId())) {
+                            message = "Пользователь " + nickname + " не является обычным членом группы. Проверяйте.";
+                            clearMenu(update, ctx.lastMessageId, message);
+                            break;
+                        }
+
+                        telegramUserStatus = groupUser.getTelegramUserStatus();
+                        if (telegramUserStatus == TelegramUserStatus.BANNED || telegramUserStatus == TelegramUserStatus.RESTRICTED) {
+                            telegramGateway.restoreBannedOrRestrictedUser(groupUser);
+                        } else if (telegramUserStatus == TelegramUserStatus.LEFT) {
+                            supergroupService.addMemberToSupergroup(groupUser);
+                        }
+
+                        subscribeAndSendMessage(groupUser, ctx, update);
+
+                    } else {
+                        groupUser = adminBotService.getUser(nickname);
+
+                        if (groupUser.isAdminOrCreator()) {
+                            message = "Пользователь " + nickname + " не является обычным членом группы. Проверяйте.";
+                            clearMenu(update, ctx.lastMessageId, message);
+                            return;
+                        }
+
+                        // при бане админа он понижается в SQL до MEMBER
+                        if (!groupUser.isMember())
+                            groupUser.setTelegramUserStatus(TelegramUserStatus.MEMBER);
+
+                        groupUser = subscribeAndSendMessage(groupUser, ctx, update);
+
+                        if (!inSupergroup)
+                            supergroupService.addMemberToSupergroup(groupUser);
+                    }
+
+                } else if (text.startsWith("@")) {
+                    deleteMenu(update, ctx.lastMessageId);
+                    ctx.menuState = MenuState.SUBSCRIBER_ID_MENU;
+                    InlineKeyboardMarkup markup = menuBuilder.getSubscriberId(update);
+                    SendMessage sendMessage = messageBuilder.createMessage(update, markup, "Введите нормальный никнейм.");
+                    ctx.lastMessageId = safeExecute(sendMessage).getMessageId();
                 } else if ("BACK-TO-DURATION".equals(data)) {
                     ctx.subscriptionDetails.set(1, "");
                     ctx.menuState = MenuState.DURATION_MENU;
@@ -433,7 +450,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                 if (!text.trim().isEmpty()) {
                     String phone = phoneValidatorAndNormalizer.validateAndNormalize(text);
                     if (phone != null) {
-                        GroupUser groupAdmin = supergroupService.addUserToSupergroup(phone);
+                        GroupUser groupAdmin = supergroupService.addMemberToSupergroup(phone);
                         if (groupAdmin != null) {
                             promoteToAdmin(groupAdmin.getTelegramId());
                             groupAdmin.setSubscriptionType(Subscription.ADMIN);
@@ -513,6 +530,29 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                 }
             }
         }
+    }
+
+    private void sendLink(Update update, Long chatId, ConversationContext ctx) {
+        ExportChatInviteLink exportChatInviteLink = ExportChatInviteLink.builder()
+                .chatId(chatId)
+                .build();
+        String inviteLink = telegramGateway.safeExecute(exportChatInviteLink);
+
+        SendMessage sendMessage = SendMessage.builder()
+                .chatId(update.getMessage().getChatId())
+                .text("Следующим сообщением будет ссылка, перешлите её подписчику.")
+                .build();
+        telegramGateway.safeExecute(sendMessage);
+
+        clearMenu(update, ctx.lastMessageId, inviteLink);
+    }
+
+
+    private GroupUser subscribeAndSendMessage(GroupUser groupUser, ConversationContext ctx, Update update) {
+        groupUser = adminBotService.subscribeExistedGroupUser(groupUser, ctx.subscriptionDetails);
+        String message = "Пользователь: " + groupUser.getNickname() + " подписка: " + ctx.subscriptionDetails.get(0) + ", на срок: " + ctx.subscriptionDetails.get(1);
+        clearMenu(update, ctx.lastMessageId, message);
+        return groupUser;
     }
 
     private void promoteToAdmin(long userId) {
@@ -607,7 +647,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
             adminNickname = "В БД нет администраторов.\n";
         } else {
             adminNickname = admins.stream()
-                    .filter(groupUser -> groupUser.getStatus() == UserStatus.ACTIVE)
+                    .filter(GroupUser::isActive)
                     .map(GroupUser::getNickname)
                     .collect(Collectors.joining("\n"));
         }

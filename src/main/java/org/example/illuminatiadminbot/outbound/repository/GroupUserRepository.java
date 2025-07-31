@@ -19,4 +19,6 @@ public interface GroupUserRepository extends JpaRepository<GroupUser,Long> {
     List<GroupUser> findAllByTelegramUserStatusAndChatIdIsNotNull(TelegramUserStatus role);
 
     Optional<GroupUser> findByTelegramId(long userId);
+
+    boolean existsGroupUserByNickname(String nickname);
 }
