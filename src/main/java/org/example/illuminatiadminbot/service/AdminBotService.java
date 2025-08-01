@@ -114,7 +114,7 @@ public class AdminBotService {
                 throw new NoSuchElementException();
             }
             GroupUser groupUser = groupUserOptional.get();
-            groupUser.setTelegramUserStatus(TelegramUserStatus.MEMBER);
+            groupUser.setTelegramUserStatus(TelegramUserStatus.BANNED);
             groupUserRepository.save(groupUser);
         } catch (NoSuchElementException _) {
             return false;

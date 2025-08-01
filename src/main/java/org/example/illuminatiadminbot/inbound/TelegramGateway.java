@@ -2,6 +2,7 @@ package org.example.illuminatiadminbot.inbound;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.illuminatiadminbot.inbound.model.TelegramUserStatus;
 import org.example.illuminatiadminbot.outbound.model.GroupUser;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -49,24 +50,22 @@ public class TelegramGateway {
         safeExecute(unbanChatMember);
     }
 
-    public void restoreBannedOrRestrictedUser(GroupUser groupUser) {
+    public void clearBannedStatus(GroupUser groupUser) {
+        UnbanChatMember unbanChatMember = UnbanChatMember.builder()
+                .chatId(superGroupChatId)
+                .userId(groupUser.getTelegramId())
+                .build();
+        safeExecute(unbanChatMember);
+        groupUser.setTelegramUserStatus(TelegramUserStatus.MEMBER);
+    }
 
-        switch (groupUser.getTelegramUserStatus()) {
-            case BANNED -> safeExecute(
-                    UnbanChatMember.builder()
-                            .chatId(superGroupChatId)
-                            .userId(groupUser.getTelegramId())
-                            .build()
-            );
-
-            case RESTRICTED -> {
-                RestrictChatMember restrictChatMember = RestrictChatMember.builder()
-                        .chatId(superGroupChatId)
-                        .userId(groupUser.getTelegramId())
-                        .permissions(chatPermissionsFabric.getStandard())
-                        .build();
-                safeExecute(restrictChatMember);
-            }
-        }
+    public void restoreRestrictedUser(GroupUser groupUser) {
+        RestrictChatMember restrictChatMember = RestrictChatMember.builder()
+                .chatId(superGroupChatId)
+                .userId(groupUser.getTelegramId())
+                .permissions(chatPermissionsFabric.getStandard())
+                .build();
+        safeExecute(restrictChatMember);
     }
 }
+

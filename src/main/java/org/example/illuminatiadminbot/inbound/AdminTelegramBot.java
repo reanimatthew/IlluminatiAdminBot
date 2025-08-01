@@ -17,13 +17,14 @@ import org.telegram.telegrambots.longpolling.interfaces.LongPollingUpdateConsume
 import org.telegram.telegrambots.longpolling.starter.SpringLongPollingBot;
 import org.telegram.telegrambots.longpolling.util.LongPollingSingleThreadUpdateConsumer;
 import org.telegram.telegrambots.meta.api.methods.GetFile;
-import org.telegram.telegrambots.meta.api.methods.groupadministration.ExportChatInviteLink;
+import org.telegram.telegrambots.meta.api.methods.groupadministration.CreateChatInviteLink;
 import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMember;
 import org.telegram.telegrambots.meta.api.methods.groupadministration.PromoteChatMember;
 import org.telegram.telegrambots.meta.api.methods.send.SendDocument;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
+import org.telegram.telegrambots.meta.api.objects.ChatInviteLink;
 import org.telegram.telegrambots.meta.api.objects.File;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Update;
@@ -35,8 +36,13 @@ import org.telegram.telegrambots.meta.generics.TelegramClient;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.util.*;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
@@ -228,7 +234,15 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
             }
 
             case SUBSCRIBER_ID_MENU -> {
-                if (!text.isEmpty() && !(text.startsWith("@") && text.length() == 1)) {
+                if ("BACK-TO-DURATION".equals(data)) {
+                    ctx.subscriptionDetails.set(1, "");
+                    ctx.menuState = MenuState.DURATION_MENU;
+                    InlineKeyboardMarkup markup = menuBuilder.getDuration(update);
+                    EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Подписка: " + ctx.subscriptionDetails.get(0) + "\nВыберите срок подписки:");
+                    safeExecute(editMessage);
+                } else if (text.length() < 2) {
+                    showError(update, ctx, "Введите нормальный никнейм/номер телефона");
+                } else {
                     GroupUser groupUser;
                     String message = "";
                     String nickname = "";
@@ -245,13 +259,14 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                         }
                     } else if (byPhone) {
                         phone = phoneValidatorAndNormalizer.validateAndNormalize(text);
+                        if (phone == null) {
+                            showError(update, ctx, "Введите нормальный номер телефона");
+                            return;
+                        }
+
                         telegramId = supergroupService.getTelegramIdByPhone(phone);
                         if (telegramId < 1) {
-                            deleteMenu(update, ctx.lastMessageId);
-                            ctx.menuState = MenuState.SUBSCRIBER_ID_MENU;
-                            InlineKeyboardMarkup markup = menuBuilder.getSubscriberId(update);
-                            SendMessage sendMessage = messageBuilder.createMessage(update, markup, "Пользователя с таким телефоном не существует.\nВведите номер телефона пользователя в формате +79261234567");
-                            ctx.lastMessageId = safeExecute(sendMessage).getMessageId();
+                            showError(update, ctx, "Пользователя с таким телефоном не существует.\nВведите правильный номер телефона пользователя");
                             return;
                         }
                         nickname = supergroupService.getNicknameByTelegramId(telegramId);
@@ -265,7 +280,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                         groupUser = adminBotService.subscribeNewUser(nickname, telegramId, ctx.subscriptionDetails);
 
                         if (byNick) {
-                            sendLink(update, chatId, ctx);
+                            sendLink(update, ctx);
                         } else if (byPhone) {
                             supergroupService.addMemberToSupergroup(groupUser);
                             subscribeAndSendMessage(groupUser, ctx, update);
@@ -281,8 +296,11 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                         }
 
                         telegramUserStatus = groupUser.getTelegramUserStatus();
-                        if (telegramUserStatus == TelegramUserStatus.BANNED || telegramUserStatus == TelegramUserStatus.RESTRICTED) {
-                            telegramGateway.restoreBannedOrRestrictedUser(groupUser);
+                        if (telegramUserStatus == TelegramUserStatus.BANNED) {
+                            telegramGateway.clearBannedStatus(groupUser);
+                            supergroupService.addMemberToSupergroup(groupUser);
+                        } else if (telegramUserStatus == TelegramUserStatus.RESTRICTED) {
+                            telegramGateway.restoreRestrictedUser(groupUser);
                         } else if (telegramUserStatus == TelegramUserStatus.LEFT) {
                             supergroupService.addMemberToSupergroup(groupUser);
                         }
@@ -308,18 +326,6 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                             supergroupService.addMemberToSupergroup(groupUser);
                     }
 
-                } else if (text.startsWith("@")) {
-                    deleteMenu(update, ctx.lastMessageId);
-                    ctx.menuState = MenuState.SUBSCRIBER_ID_MENU;
-                    InlineKeyboardMarkup markup = menuBuilder.getSubscriberId(update);
-                    SendMessage sendMessage = messageBuilder.createMessage(update, markup, "Введите нормальный никнейм.");
-                    ctx.lastMessageId = safeExecute(sendMessage).getMessageId();
-                } else if ("BACK-TO-DURATION".equals(data)) {
-                    ctx.subscriptionDetails.set(1, "");
-                    ctx.menuState = MenuState.DURATION_MENU;
-                    InlineKeyboardMarkup markup = menuBuilder.getDuration(update);
-                    EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Подписка: " + ctx.subscriptionDetails.get(0) + "\nВыберите срок подписки:");
-                    safeExecute(editMessage);
                 }
             }
 
@@ -532,21 +538,32 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
         }
     }
 
-    private void sendLink(Update update, Long chatId, ConversationContext ctx) {
-        ExportChatInviteLink exportChatInviteLink = ExportChatInviteLink.builder()
-                .chatId(chatId)
+    private void showError(Update update, ConversationContext ctx, String errorMessage) {
+        deleteMenu(update, ctx.lastMessageId);
+        ctx.menuState = MenuState.SUBSCRIBER_ID_MENU;
+        InlineKeyboardMarkup markup = menuBuilder.getSubscriberId(update);
+        SendMessage sendMessage = messageBuilder.createMessage(update, markup, errorMessage);
+        ctx.lastMessageId = safeExecute(sendMessage).getMessageId();
+    }
+
+    private void sendLink(Update update, ConversationContext ctx) {
+        CreateChatInviteLink createChatInviteLink = CreateChatInviteLink.builder()
+                .chatId(supergroupChatId)
+                .memberLimit(1)
+                .expireDate((int) Instant.now().plus(3, ChronoUnit.DAYS).getEpochSecond())
                 .build();
-        String inviteLink = telegramGateway.safeExecute(exportChatInviteLink);
+
+        ChatInviteLink chatInviteLink = telegramGateway.safeExecute(createChatInviteLink);
+        String inviteLink = chatInviteLink.getInviteLink();
 
         SendMessage sendMessage = SendMessage.builder()
                 .chatId(update.getMessage().getChatId())
-                .text("Следующим сообщением будет ссылка, перешлите её подписчику.")
+                .text("Следующим сообщением будет одноразовая ссылка, перешлите её подписчику.")
                 .build();
         telegramGateway.safeExecute(sendMessage);
 
         clearMenu(update, ctx.lastMessageId, inviteLink);
     }
-
 
     private GroupUser subscribeAndSendMessage(GroupUser groupUser, ConversationContext ctx, Update update) {
         groupUser = adminBotService.subscribeExistedGroupUser(groupUser, ctx.subscriptionDetails);
