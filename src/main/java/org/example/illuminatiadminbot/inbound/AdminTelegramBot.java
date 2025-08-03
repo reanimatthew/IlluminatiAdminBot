@@ -114,7 +114,10 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                         .text(stringBuilder.toString())
                         .build();
                 telegramGateway.safeExecute(sendMessage);
+                ctx.clearContext();
+                return;
             }
+
         }
 
         if (update.hasMessage() && update.getMessage().hasText()) {
@@ -125,6 +128,8 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                         .text(message)
                         .build();
                 telegramGateway.safeExecute(sendMessage);
+                ctx.clearContext();
+                return;
             }
         }
 
@@ -234,7 +239,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
             }
 
             case SUBSCRIBER_ID_MENU -> {
-                if ("BACK-TO-DURATION".equals(data)) {
+                if (update.hasCallbackQuery() && "BACK-TO-DURATION".equals(data)) {
                     ctx.subscriptionDetails.set(1, "");
                     ctx.menuState = MenuState.DURATION_MENU;
                     InlineKeyboardMarkup markup = menuBuilder.getDuration(update);
@@ -298,7 +303,6 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                         telegramUserStatus = groupUser.getTelegramUserStatus();
                         if (telegramUserStatus == TelegramUserStatus.BANNED) {
                             telegramGateway.clearBannedStatus(groupUser);
-                            supergroupService.addMemberToSupergroup(groupUser);
                         } else if (telegramUserStatus == TelegramUserStatus.RESTRICTED) {
                             telegramGateway.restoreRestrictedUser(groupUser);
                         } else if (telegramUserStatus == TelegramUserStatus.LEFT) {
@@ -314,6 +318,11 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                             message = "Пользователь " + nickname + " не является обычным членом группы. Проверяйте.";
                             clearMenu(update, ctx.lastMessageId, message);
                             return;
+                        }
+
+                        telegramUserStatus = groupUser.getTelegramUserStatus();
+                        if (telegramUserStatus == TelegramUserStatus.BANNED) {
+                            telegramGateway.clearBannedStatus(groupUser);
                         }
 
                         // при бане админа он понижается в SQL до MEMBER
@@ -409,7 +418,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                     try {
                         SendDocument sendDocument = SendDocument.builder()
                                 .document(ctx.uploadDetails.getInputFile())
-                                .chatId("-100" + supergroupId)
+                                .chatId(supergroupChatId)
                                 .build();
                         sendDocument.setCaption(text);
 
@@ -575,7 +584,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
     private void promoteToAdmin(long userId) {
         if (!isUserAdmin(userId)) {
             PromoteChatMember promoteChatMember = PromoteChatMember.builder()
-                    .chatId("-100" + supergroupId)
+                    .chatId(supergroupChatId)
                     .userId(userId)
                     .canChangeInformation(true)
                     .canDeleteMessages(true)
@@ -589,7 +598,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
 
     public boolean isUserAdmin(long userId) {
         GetChatMember getChatMember = GetChatMember.builder()
-                .chatId("-100" + supergroupId)
+                .chatId(supergroupChatId)
                 .userId(userId)
                 .build();
         ChatMember chatMember = telegramGateway.safeExecute(getChatMember);
@@ -691,5 +700,15 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
         private MenuState menuState = MenuState.MAIN_MENU;
         private Integer lastMessageId = null;
         private Long chatId = null;
+
+        private void clearContext() {
+            subscriptionDetails.set(0, "");
+            subscriptionDetails.set(1, "");
+            subscriptionDetails.set(2, "");
+            uploadDetails.clearUploadDetails();
+            menuState = MenuState.MAIN_MENU;
+            lastMessageId = null;
+            chatId = null;
+        }
     }
 }

@@ -47,7 +47,7 @@ public class SupergroupService {
 
         // проверяем, есть ли юзер в группе
         GroupUser existUser = getGroupUserById(telegramId);
-        if (existUser != null)
+        if (existUser != null && existUser.isActive())
             return existUser;
 
         TdApi.AddChatMember inviteRequest = new TdApi.AddChatMember(
@@ -75,7 +75,7 @@ public class SupergroupService {
 
     public void addMemberToSupergroup(GroupUser groupUser) {
 
-        if (getGroupUserById(groupUser.getTelegramId()) == null) {
+        if (getGroupUserById(groupUser.getTelegramId()) == null ) {
             TdApi.AddChatMember inviteRequest = new TdApi.AddChatMember(
                     supergroupChatId,
                     groupUser.getTelegramId(),
@@ -379,4 +379,19 @@ public class SupergroupService {
         throw new RuntimeException("SupergroupService.getGroupUserByNickname: почему-то не найден по нику");
     }
 
+    public void unbanMember(GroupUser groupUser) {
+        TdApi.SetChatMemberStatus setChatMemberStatus = new TdApi.SetChatMemberStatus(
+                supergroupChatId,
+                new TdApi.MessageSenderUser(groupUser.getTelegramId()),
+                new TdApi.ChatMemberStatusMember()
+        );
+
+        log.info(setChatMemberStatus.toString());
+
+        try {
+            simpleTelegramClient.send(setChatMemberStatus);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 }

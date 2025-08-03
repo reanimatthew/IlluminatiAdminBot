@@ -56,7 +56,6 @@ public class TelegramGateway {
                 .userId(groupUser.getTelegramId())
                 .build();
         safeExecute(unbanChatMember);
-        groupUser.setTelegramUserStatus(TelegramUserStatus.MEMBER);
     }
 
     public void restoreRestrictedUser(GroupUser groupUser) {
