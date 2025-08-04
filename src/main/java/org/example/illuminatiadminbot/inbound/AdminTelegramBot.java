@@ -1,10 +1,16 @@
 package org.example.illuminatiadminbot.inbound;
 
+import jakarta.annotation.PostConstruct;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.illuminatiadminbot.configuration.TopicProperties;
+import org.example.illuminatiadminbot.inbound.handler.DurationMenuHandler;
+import org.example.illuminatiadminbot.inbound.handler.HandlerRegistry;
+import org.example.illuminatiadminbot.inbound.handler.HandlerResult;
+import org.example.illuminatiadminbot.inbound.handler.SubscriptionMenuHandler;
 import org.example.illuminatiadminbot.inbound.menu.*;
+import org.example.illuminatiadminbot.inbound.model.EventType;
 import org.example.illuminatiadminbot.inbound.model.TelegramUserStatus;
 import org.example.illuminatiadminbot.inbound.model.UploadDetails;
 import org.example.illuminatiadminbot.outbound.model.GroupUser;
@@ -60,6 +66,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
     private final TopicProperties topicProperties;
     private final PhoneValidatorAndNormalizer phoneValidatorAndNormalizer;
     private final TelegramGateway telegramGateway;
+    private final HandlerRegistry handlerRegistry;
 
     @Value("${telegram.bot.token}")
     private String token;
@@ -69,6 +76,12 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
 
     @Value("${chat.id}")
     private long supergroupChatId;
+
+    @PostConstruct
+    public void init() {
+        handlerRegistry.register(new DurationMenuHandler(new MenuBuilder()));
+        handlerRegistry.register(new SubscriptionMenuHandler(new MenuBuilder()));
+    }
 
     @Override
     public void consume(Update update) {
@@ -85,12 +98,17 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
 //            return;
 //        }
 
+
         String text = "";
         String data = "";
         Long chatId = update.hasMessage()
                 ? update.getMessage().getChatId()
                 : update.getCallbackQuery().getMessage().getChatId();
         ConversationContext ctx = contextMap.computeIfAbsent(chatId, _ -> new ConversationContext());
+
+        EventType eventType = update.hasCallbackQuery() ? EventType.CALLBACK : EventType.TEXT;
+        MenuState menuState = ctx.getMenuState();
+
         if (ctx.chatId == null)
             ctx.chatId = chatId;
 
@@ -117,7 +135,6 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                 ctx.clearContext();
                 return;
             }
-
         }
 
         if (update.hasMessage() && update.getMessage().hasText()) {
@@ -133,6 +150,14 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
             }
         }
 
+        handlerRegistry.resolve(menuState, eventType)
+                .ifPresent(handler -> {
+                            HandlerResult result = handler.handle(update, ctx);
+                            result.getActions().forEach(action -> action.execute(telegramGateway, update, ctx));
+                            result.updateContext(ctx);
+                            ctx.setMenuState(result.getNextMenuState());
+                        }
+                );
 
         if (update.hasMessage() && update.getMessage().hasText()) {
             text = update.getMessage().getText();
@@ -182,44 +207,44 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                 }
             }
 
-            case SUBSCRIPTION_MENU -> {
-                if (Subscription.contains(data)) {
-                    ctx.subscriptionDetails.set(0, data);
-                    ctx.subscriptionDetails.set(1, "");
-                    ctx.subscriptionDetails.set(2, "");
-                    ctx.menuState = MenuState.DURATION_MENU;
-                    InlineKeyboardMarkup markup = menuBuilder.getDuration(update);
-                    EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Подписка: " + ctx.subscriptionDetails.get(0) + "\nВыберите срок подписки:");
-                    safeExecute(editMessage);
-                } else if ("BACK-TO-MAIN".equals(data)) {
-                    ctx.subscriptionDetails.set(0, "");
-                    ctx.subscriptionDetails.set(1, "");
-                    ctx.subscriptionDetails.set(2, "");
-                    ctx.menuState = MenuState.MAIN_MENU;
-                    InlineKeyboardMarkup markup = menuBuilder.getMain(update);
-                    EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Выберите действие:");
-                    safeExecute(editMessage);
-                }
-            }
+//            case SUBSCRIPTION_MENU -> {
+//                if (Subscription.contains(data)) {
+//                    ctx.subscriptionDetails.set(0, data);
+//                    ctx.subscriptionDetails.set(1, "");
+//                    ctx.subscriptionDetails.set(2, "");
+//                    ctx.menuState = MenuState.DURATION_MENU;
+//                    InlineKeyboardMarkup markup = menuBuilder.getDuration(update);
+//                    EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Подписка: " + ctx.subscriptionDetails.get(0) + "\nВыберите срок подписки:");
+//                    safeExecute(editMessage);
+//                } else if ("BACK-TO-MAIN".equals(data)) {
+//                    ctx.subscriptionDetails.set(0, "");
+//                    ctx.subscriptionDetails.set(1, "");
+//                    ctx.subscriptionDetails.set(2, "");
+//                    ctx.menuState = MenuState.MAIN_MENU;
+//                    InlineKeyboardMarkup markup = menuBuilder.getMain(update);
+//                    EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Выберите действие:");
+//                    safeExecute(editMessage);
+//                }
+//            }
 
-            case DURATION_MENU -> {
-                if (List.of("1M", "3M", "6M", "12M").contains(data)) {
-                    ctx.subscriptionDetails.set(1, data);
-                    ctx.subscriptionDetails.set(2, "");
-                    ctx.menuState = MenuState.NICK_OR_PHONE_MENU;
-                    InlineKeyboardMarkup markup = menuBuilder.getNickOrPhone(update);
-                    EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Подписка: " + ctx.subscriptionDetails.get(0) + "\nCрок: " + ctx.subscriptionDetails.get(1) + "\nБудете вводить nickname или телефон подписчика?");
-                    safeExecute(editMessage);
-                } else if ("BACK-TO-SUBSCRIPTION".equals(data)) {
-                    ctx.subscriptionDetails.set(0, "");
-                    ctx.subscriptionDetails.set(1, "");
-                    ctx.subscriptionDetails.set(2, "");
-                    ctx.menuState = MenuState.SUBSCRIPTION_MENU;
-                    InlineKeyboardMarkup markup = menuBuilder.getSubscription(update);
-                    EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Выберите подписку:");
-                    safeExecute(editMessage);
-                }
-            }
+//            case DURATION_MENU -> {
+//                if (List.of("1M", "3M", "6M", "12M").contains(data)) {
+//                    ctx.subscriptionDetails.set(1, data);
+//                    ctx.subscriptionDetails.set(2, "");
+//                    ctx.menuState = MenuState.NICK_OR_PHONE_MENU;
+//                    InlineKeyboardMarkup markup = menuBuilder.getNickOrPhone(update);
+//                    EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Подписка: " + ctx.subscriptionDetails.get(0) + "\nCрок: " + ctx.subscriptionDetails.get(1) + "\nБудете вводить nickname или телефон подписчика?");
+//                    safeExecute(editMessage);
+//                } else if ("BACK-TO-SUBSCRIPTION".equals(data)) {
+//                    ctx.subscriptionDetails.set(0, "");
+//                    ctx.subscriptionDetails.set(1, "");
+//                    ctx.subscriptionDetails.set(2, "");
+//                    ctx.menuState = MenuState.SUBSCRIPTION_MENU;
+//                    InlineKeyboardMarkup markup = menuBuilder.getSubscription(update);
+//                    EditMessageText editMessage = messageBuilder.editMessage(update, ctx.lastMessageId, markup, "Выберите подписку:");
+//                    safeExecute(editMessage);
+//                }
+//            }
 
             case NICK_OR_PHONE_MENU -> {
                 if (List.of("BY-PHONE", "BY-NICK").contains(data)) {
@@ -282,6 +307,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                     TelegramUserStatus telegramUserStatus;
 
                     if (!inSql && !inSupergroup) {
+                        log.info("if (!inSql && !inSupergroup)");
                         groupUser = adminBotService.subscribeNewUser(nickname, telegramId, ctx.subscriptionDetails);
 
                         if (byNick) {
@@ -292,6 +318,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                         }
 
                     } else if (!inSql) {
+                        log.info("else if (!inSql)");
                         groupUser = supergroupService.getGroupUserByNickname(nickname);
 
                         if (!supergroupService.isOrdinaryMember(groupUser.getTelegramId())) {
@@ -306,12 +333,14 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                         } else if (telegramUserStatus == TelegramUserStatus.RESTRICTED) {
                             telegramGateway.restoreRestrictedUser(groupUser);
                         } else if (telegramUserStatus == TelegramUserStatus.LEFT) {
+                            log.info("else if (telegramUserStatus == TelegramUserStatus.LEFT)");
                             supergroupService.addMemberToSupergroup(groupUser);
                         }
 
                         subscribeAndSendMessage(groupUser, ctx, update);
 
                     } else {
+
                         groupUser = adminBotService.getUser(nickname);
 
                         if (groupUser.isAdminOrCreator()) {
@@ -322,7 +351,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
 
                         telegramUserStatus = groupUser.getTelegramUserStatus();
                         if (telegramUserStatus == TelegramUserStatus.BANNED) {
-                            telegramGateway.clearBannedStatus(groupUser);
+                            supergroupService.unbanMember(groupUser);
                         }
 
                         // при бане админа он понижается в SQL до MEMBER
@@ -331,10 +360,10 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
 
                         groupUser = subscribeAndSendMessage(groupUser, ctx, update);
 
-                        if (!inSupergroup)
+                        if (!inSupergroup) {
                             supergroupService.addMemberToSupergroup(groupUser);
+                        }
                     }
-
                 }
             }
 

@@ -75,7 +75,7 @@ public class SupergroupService {
 
     public void addMemberToSupergroup(GroupUser groupUser) {
 
-        if (getGroupUserById(groupUser.getTelegramId()) == null ) {
+        if (getGroupUserById(groupUser.getTelegramId()) == null) {
             TdApi.AddChatMember inviteRequest = new TdApi.AddChatMember(
                     supergroupChatId,
                     groupUser.getTelegramId(),
@@ -95,6 +95,8 @@ public class SupergroupService {
             } catch (InterruptedException | ExecutionException e) {
                 throw new RuntimeException(e);
             }
+        } else {
+            log.info(getGroupUserById(groupUser.getTelegramId()).toStringSql());
         }
     }
 
@@ -386,7 +388,7 @@ public class SupergroupService {
                 new TdApi.ChatMemberStatusMember()
         );
 
-        log.info(setChatMemberStatus.toString());
+        log.info("SupergroupService.unbanMember");
 
         try {
             simpleTelegramClient.send(setChatMemberStatus);
