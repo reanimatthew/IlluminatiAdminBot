@@ -1,28 +1,30 @@
 package org.example.illuminatiadminbot.inbound.handler;
 
-import org.example.illuminatiadminbot.inbound.AdminTelegramBot;
+import org.example.illuminatiadminbot.inbound.ConversationContext;
 import org.example.illuminatiadminbot.inbound.TelegramGateway;
-import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 
-public interface OutboundAction {
-    void execute(TelegramGateway telegramGateway, Update update, AdminTelegramBot.ConversationContext conversationContext);
+import java.util.Collections;
 
-    static OutboundAction sendMessage(String text, InlineKeyboardMarkup inlineKeyboardMarkup) {
+public interface OutboundAction {
+    void execute(TelegramGateway telegramGateway, Update update, ConversationContext conversationContext);
+
+    static OutboundAction sendFinalMessage(String text) {
         return (telegramGateway, update, conversationContext) -> {
             long chatId = update.hasMessage()
                     ? update.getMessage().getChatId()
                     : update.getCallbackQuery().getMessage().getChatId();
 
-            SendMessage sendMessage = SendMessage.builder()
+            EditMessageText editMessageText = EditMessageText.builder()
                     .chatId(chatId)
+                    .messageId(update.getMessage().getMessageId())
                     .text(text)
-                    .replyMarkup(inlineKeyboardMarkup)
+                    .replyMarkup(new InlineKeyboardMarkup(Collections.emptyList()))
                     .build();
 
-            telegramGateway.safeExecute(sendMessage);
+            telegramGateway.safeExecute(editMessageText);
         };
     }
 

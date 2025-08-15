@@ -31,10 +31,23 @@ public class MenuBuilder {
                 .callbackData("BAN-USER")
                 .build();
 
-        InlineKeyboardRow row1 = new InlineKeyboardRow(btn1, btn2, btn3, btn4);
+        InlineKeyboardButton btn5 = InlineKeyboardButton.builder()
+                .text("Показать БД")
+                .callbackData("SHOW-SQL")
+                .build();
+
+        InlineKeyboardButton btn6 = InlineKeyboardButton.builder()
+                .text("Показать супергруппу")
+                .callbackData("SHOW-SUPERGROUP")
+                .build();
+
+
+        InlineKeyboardRow row1 = new InlineKeyboardRow(btn1, btn2, btn3);
+        InlineKeyboardRow row2 = new InlineKeyboardRow(btn4, btn5, btn6);
 
         return InlineKeyboardMarkup.builder()
                 .keyboardRow(row1)
+                .keyboardRow(row2)
                 .build();
     }
 

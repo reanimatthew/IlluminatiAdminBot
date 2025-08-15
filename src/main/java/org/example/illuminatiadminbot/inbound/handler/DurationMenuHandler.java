@@ -1,7 +1,7 @@
 package org.example.illuminatiadminbot.inbound.handler;
 
 import lombok.RequiredArgsConstructor;
-import org.example.illuminatiadminbot.inbound.AdminTelegramBot;
+import org.example.illuminatiadminbot.inbound.ConversationContext;
 import org.example.illuminatiadminbot.inbound.menu.MenuBuilder;
 import org.example.illuminatiadminbot.inbound.menu.MenuState;
 import org.example.illuminatiadminbot.inbound.model.EventType;
@@ -19,7 +19,7 @@ public class DurationMenuHandler implements Handler {
     }
 
     @Override
-    public HandlerResult handle(Update update, AdminTelegramBot.ConversationContext conversationContext) {
+    public HandlerResult handle(Update update, ConversationContext conversationContext) {
         String data = update.getCallbackQuery().getData();
 
         if ("BACK-TO-SUBSCRIPTION".equals(data)) {
@@ -64,8 +64,7 @@ public class DurationMenuHandler implements Handler {
         return HandlerResult.builder()
                 .actions(List.of())
                 .nextMenuState(MenuState.DURATION_MENU)
-                .contextUpdater(_ -> {
-                })
+                .contextUpdater(_ -> {})
                 .build();
     }
 }

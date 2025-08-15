@@ -7,6 +7,7 @@ import org.example.illuminatiadminbot.inbound.menu.Subscription;
 import org.example.illuminatiadminbot.inbound.model.TelegramUserStatus;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 
 @Entity
 
@@ -58,7 +59,7 @@ public class GroupUser {
                 "\nтип подписки: " + subscriptionType +
                 "\nдлительность подписки, мес.: " + subscriptionDuration +
                 "\nподписка истекает: " + subscriptionExpiration +
-                "\n\n";
+                "\n";
     }
 
     public boolean isActive() {
@@ -83,7 +84,7 @@ public class GroupUser {
                     .telegramUserStatus(TelegramUserStatus.CREATOR)
                     .subscriptionType(Subscription.CREATOR)
                     .subscriptionDuration(12 * 20)
-                    .subscriptionExpiration(LocalDate.now().plusYears(20))
+                    .subscriptionExpiration(LocalDate.now(ZoneId.of("Europe/Moscow")).plusYears(20))
                     .build();
 
             case ADMINISTRATOR -> builder()
@@ -92,7 +93,7 @@ public class GroupUser {
                     .telegramUserStatus(TelegramUserStatus.ADMINISTRATOR)
                     .subscriptionType(Subscription.ADMIN)
                     .subscriptionDuration(12 * 5)
-                    .subscriptionExpiration(LocalDate.now().plusYears(5))
+                    .subscriptionExpiration(LocalDate.now(ZoneId.of("Europe/Moscow")).plusYears(5))
                     .build();
 
             case MEMBER -> builder()
@@ -101,7 +102,7 @@ public class GroupUser {
                     .telegramUserStatus(TelegramUserStatus.MEMBER)
                     .subscriptionType(Subscription.TEMP)
                     .subscriptionDuration(1)
-                    .subscriptionExpiration(LocalDate.now().plusMonths(1))
+                    .subscriptionExpiration(LocalDate.now(ZoneId.of("Europe/Moscow")).plusMonths(1))
                     .build();
 
             case BANNED -> builder()

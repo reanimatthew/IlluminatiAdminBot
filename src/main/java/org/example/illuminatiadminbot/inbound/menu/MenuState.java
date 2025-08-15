@@ -14,5 +14,7 @@ public enum MenuState {
     ADMIN_MENU,
     APPOINTMENT_MENU,
     DISMISSAL_MENU,
-    BAN_MENU
+    BAN_MENU,
+    SHOW_SQL_MENU,
+    SHOW_SUPERGROUPS_MENU
 }

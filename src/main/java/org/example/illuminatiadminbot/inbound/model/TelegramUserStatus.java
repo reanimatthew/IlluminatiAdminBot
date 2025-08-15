@@ -36,4 +36,12 @@ public enum TelegramUserStatus {
                 .collect(Collectors.toList());
     }
 
+    public static List<TelegramUserStatus> getInactiveStatuses() {
+        return List.of(RESTRICTED, LEFT, BANNED);
+    }
+
+    public static List<TelegramUserStatus> getActiveStatuses() {
+        return List.of(CREATOR, ADMINISTRATOR, MEMBER);
+    }
+
 }

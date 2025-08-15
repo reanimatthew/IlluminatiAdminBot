@@ -1,6 +1,7 @@
 package org.example.illuminatiadminbot.service;
 
 import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.example.illuminatiadminbot.inbound.menu.Subscription;
 import org.example.illuminatiadminbot.inbound.model.TelegramUserStatus;
 import org.example.illuminatiadminbot.inbound.model.UploadDetails;
@@ -16,6 +17,7 @@ import org.telegram.telegrambots.meta.api.objects.InputFile;
 
 import java.io.InputStream;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -24,6 +26,7 @@ import java.util.stream.Collectors;
 
 @Service
 @AllArgsConstructor
+@Slf4j
 public class AdminBotService {
 
     private final GroupUserRepository groupUserRepository;
@@ -35,7 +38,7 @@ public class AdminBotService {
         String subscriptionType = subscriptionDetails.get(0);
         String numOfMonth = subscriptionDetails.get(1);
         int subscribeDuration = Integer.parseInt(numOfMonth.substring(0, numOfMonth.length() - 1));
-        LocalDate expirationDate = LocalDate.now().plusMonths(subscribeDuration);
+        LocalDate expirationDate = LocalDate.now(ZoneId.of("Europe/Moscow")).plusMonths(subscribeDuration);
         GroupUser groupUser;
         Optional<GroupUser> userOptional = groupUserRepository.findByNickname(nickname);
         if (userOptional.isEmpty()) {
@@ -65,7 +68,7 @@ public class AdminBotService {
         String subscriptionType = subscriptionDetails.get(0);
         String numOfMonth = subscriptionDetails.get(1);
         int subscribeDuration = Integer.parseInt(numOfMonth.substring(0, numOfMonth.length() - 1));
-        LocalDate expirationDate = LocalDate.now().plusMonths(subscribeDuration);
+        LocalDate expirationDate = LocalDate.now(ZoneId.of("Europe/Moscow")).plusMonths(subscribeDuration);
         GroupUser groupUser = GroupUser.builder()
                 .nickname(nickname)
                 .telegramId(telegramId)
@@ -140,7 +143,8 @@ public class AdminBotService {
 
     public List<Long> getAllAdminsChatId() {
         List<GroupUser> admins = groupUserRepository.findAllByTelegramUserStatusAndChatIdIsNotNull(TelegramUserStatus.ADMINISTRATOR);
-        return admins.stream().map(GroupUser::getChatId).collect(Collectors.toList());
+        admins.add(groupUserRepository.findByTelegramUserStatus(TelegramUserStatus.CREATOR));
+        return admins.stream().map(GroupUser::getChatId).toList();
     }
 
     @Transactional
@@ -173,7 +177,7 @@ public class AdminBotService {
         String subscriptionType = subscriptionDetails.get(0);
         String numOfMonth = subscriptionDetails.get(1);
         int subscribeDuration = Integer.parseInt(numOfMonth.substring(0, numOfMonth.length() - 1));
-        LocalDate expirationDate = LocalDate.now().plusMonths(subscribeDuration);
+        LocalDate expirationDate = LocalDate.now(ZoneId.of("Europe/Moscow")).plusMonths(subscribeDuration);
         groupUser.setSubscriptionType(Subscription.fromString(subscriptionType));
         groupUser.setSubscriptionDuration(subscribeDuration);
         groupUser.setSubscriptionExpiration(expirationDate);
@@ -184,4 +188,13 @@ public class AdminBotService {
         Optional<GroupUser> groupUserOptional = groupUserRepository.findByNickname(nickname);
         return groupUserOptional.orElse(null);
     }
+
+    public List<GroupUser> getUsersWithExpiringSubscriptions() {
+        return groupUserRepository.findAllByTelegramUserStatusInAndSubscriptionExpirationBetween(TelegramUserStatus.getActiveStatuses(), LocalDate.now(ZoneId.of("Europe/Moscow")), LocalDate.now(ZoneId.of("Europe/Moscow")).plusWeeks(1L)).get();
+    }
+
+    public List<GroupUser> getUsersWithExpiredSubscriptions() {
+        return groupUserRepository.findAllByTelegramUserStatusInAndSubscriptionExpirationBefore(TelegramUserStatus.getActiveStatuses(), LocalDate.now(ZoneId.of("Europe/Moscow")));
+    }
+
 }

@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -138,15 +139,15 @@ public class SupergroupService {
             if (groupUser.getTelegramUserStatus() == TelegramUserStatus.ADMINISTRATOR) {
                 groupUser.setSubscriptionType(Subscription.ADMIN);
                 groupUser.setSubscriptionDuration(5 * 12);
-                groupUser.setSubscriptionExpiration(LocalDate.now().plusYears(5));
+                groupUser.setSubscriptionExpiration(LocalDate.now(ZoneId.of("Europe/Moscow")).plusYears(5));
             } else if (groupUser.getTelegramUserStatus() == TelegramUserStatus.CREATOR) {
                 groupUser.setSubscriptionType(Subscription.CREATOR);
                 groupUser.setSubscriptionDuration(20 * 12);
-                groupUser.setSubscriptionExpiration(LocalDate.now().plusYears(20));
+                groupUser.setSubscriptionExpiration(LocalDate.now(ZoneId.of("Europe/Moscow")).plusYears(20));
             } else if (groupUser.getTelegramUserStatus() == TelegramUserStatus.MEMBER) {
                 groupUser.setSubscriptionType(Subscription.TEMP);
                 groupUser.setSubscriptionDuration(1);
-                groupUser.setSubscriptionExpiration(LocalDate.now().plusMonths(1));
+                groupUser.setSubscriptionExpiration(LocalDate.now(ZoneId.of("Europe/Moscow")).plusMonths(1));
             }
         }
 

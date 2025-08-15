@@ -10,7 +10,8 @@ import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
 
 import java.io.InputStream;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 
@@ -51,7 +52,7 @@ public class BotMinioClient {
     }
 
     public MinioFileNameDetail uploadFileToMinio(UploadDetails uploadDetails, InputStream uploadFile) {
-        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss"));
+        String timestamp = LocalDate.now(ZoneId.of("Europe/Moscow")).format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss"));
         String base = FilenameUtils.getBaseName(uploadDetails.getFileName());
         String ext = FilenameUtils.getExtension(uploadDetails.getFileName());
         String suffix = ext.isEmpty() ? "" : "." + ext;

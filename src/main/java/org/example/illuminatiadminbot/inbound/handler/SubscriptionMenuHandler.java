@@ -3,6 +3,7 @@ package org.example.illuminatiadminbot.inbound.handler;
 import lombok.AllArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import org.example.illuminatiadminbot.inbound.AdminTelegramBot;
+import org.example.illuminatiadminbot.inbound.ConversationContext;
 import org.example.illuminatiadminbot.inbound.menu.MenuBuilder;
 import org.example.illuminatiadminbot.inbound.menu.MenuState;
 import org.example.illuminatiadminbot.inbound.menu.Subscription;
@@ -10,6 +11,8 @@ import org.example.illuminatiadminbot.inbound.model.EventType;
 import org.telegram.telegrambots.meta.api.objects.Update;
 
 import java.util.List;
+
+import static org.example.illuminatiadminbot.inbound.AdminTelegramBot.*;
 
 @RequiredArgsConstructor
 public class SubscriptionMenuHandler implements Handler {
@@ -21,7 +24,7 @@ public class SubscriptionMenuHandler implements Handler {
     }
 
     @Override
-    public HandlerResult handle(Update update, AdminTelegramBot.ConversationContext conversationContext) {
+    public HandlerResult handle(Update update, ConversationContext conversationContext) {
 
         String data = update.getCallbackQuery().getData();
         if ("BACK-TO-MAIN".equals(data)) {
@@ -42,7 +45,7 @@ public class SubscriptionMenuHandler implements Handler {
 
 
         if (Subscription.contains(data)) {
-            String text = "Подписка: " + conversationContext.getSubscriptionDetails().get(0) + "\nВыберите срок подписки:";
+            String text = "Подписка: " + data + "\nВыберите срок подписки:";
 
             OutboundAction outboundAction = OutboundAction.editMessage(
                     text,
