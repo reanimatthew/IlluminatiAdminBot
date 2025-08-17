@@ -108,7 +108,8 @@
             <groupId>it.tdlight</groupId>
             <artifactId>tdlight-natives</artifactId>
             <!--            TODO заменить при деплое на Linux-->
-            <classifier>windows_amd64</classifier>
+<!--            <classifier>windows_amd64</classifier>-->
+            <classifier>linux_amd64_gnu_ssl3</classifier>
         </dependency>
         <!-- https://mvnrepository.com/artifact/org.mapstruct/mapstruct -->
         <dependency>
@@ -147,6 +148,7 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
+                    <mainClass>org.example.illuminatiadminbot.IlluminatiAdminBotApplication</mainClass>
                     <excludes>
                         <exclude>
                             <groupId>org.projectlombok</groupId>
@@ -154,6 +156,13 @@
                         </exclude>
                     </excludes>
                 </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
