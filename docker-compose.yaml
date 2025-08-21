@@ -22,3 +22,37 @@ services:
     volumes:
       - ./minio/data:/data
     command: server /data --console-address ":9001"
+
+  app:
+    image: reanimatthew/illuminati-bot:0.1
+    build: .
+    depends_on:
+      - postgres
+      - minio
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/postgres
+      SPRING_DATASOURCE_USERNAME: admin
+      SPRING_DATASOURCE_PASSWORD: 123456
+      SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_USER: admin
+      MINIO_PASSWORD: password
+      TELEGRAM_BOT_TOKEN: 7758692806:AAEOREk9ZKA9NC2M8HLPPx-8X2nTzhXmH7E
+      MTPROTO_API_ID: 29134726
+      MTPROTO_API_HASH: d6d2fde10b55187a9a1132202b610bd5
+      MTPROTO_DB_DIR: /data/tdlib
+    volumes:
+      - tdlib-data:/data/tdlib
+    ports:
+      - "8080:8080"
+    user: "0:0"
+    command: >
+      sh -c "mkdir -p /data/tdlib/downloads &&
+             exec java $JAVA_OPTS -jar /app/app.jar"
+#    для запуска с интерактивным подключением к TG
+#    stdin_open: true
+#    tty: true
+
+volumes:
+  tdlib-data: {}

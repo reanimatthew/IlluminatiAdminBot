@@ -1,15 +1,20 @@
-FROM eclipse-temurin:24-jre-jammy
+# Runtime-образ (glibc, не Alpine — полезно для native-библиотек)
+FROM eclipse-temurin:24-jre
+
+# Рабочая папка
 WORKDIR /app
 
-# имя jar можно переопределить при сборке
-ARG JAR_FILE=IlluminatiAdminBot-0.0.1-SNAPSHOT.jar
-COPY ${JAR_FILE} /app/app.jar
+# Параметры JVM (опционально)
+ENV JAVA_OPTS="-Xms256m -Xmx512m" \
+    TZ=Europe/Moscow \
+    SPRING_PROFILES_ACTIVE=prod
 
-ENV JAVA_TOOL_OPTIONS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75" \
-    TZ=Etc/UTC
-# нерутовый пользователь
-RUN useradd -r -u 10001 appuser
+# Кладём заранее собранный fatjar (например, target/app.jar)
+COPY target/IlluminatiAdminBot-0.0.1-SNAPSHOT.jar /app/app.jar
+
+# Непривилегированный пользователь
+RUN useradd -r -s /bin/false appuser && chown appuser:appuser /app/app.jar
 USER appuser
 
 EXPOSE 8080
-ENTRYPOINT ["java","-jar","/app/app.jar"]
+ENTRYPOINT ["sh","-c","java $JAVA_OPTS -jar /app/app.jar"]
