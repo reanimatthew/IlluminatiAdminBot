@@ -64,7 +64,7 @@ public class DurationMenuHandler implements Handler {
         return HandlerResult.builder()
                 .actions(List.of())
                 .nextMenuState(MenuState.DURATION_MENU)
-                .contextUpdater(_ -> {})
+                .contextUpdater(context -> {})
                 .build();
     }
 }

@@ -64,7 +64,7 @@ public class SubscriptionMenuHandler implements Handler {
         return HandlerResult.builder()
                 .actions(List.of())
                 .nextMenuState(MenuState.SUBSCRIPTION_MENU)
-                .contextUpdater(_ -> {})
+                .contextUpdater(context -> {})
                 .build();
     }
 }

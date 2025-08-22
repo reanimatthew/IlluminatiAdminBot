@@ -57,7 +57,7 @@ public class NickOrPhoneHandler implements Handler {
         return HandlerResult.builder()
                 .actions(List.of())
                 .nextMenuState(MenuState.NICK_OR_PHONE_MENU)
-                .contextUpdater(_ -> {
+                .contextUpdater(context -> {
                 })
                 .build();
     }

@@ -102,7 +102,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
         Long chatId = update.hasMessage()
                 ? update.getMessage().getChatId()
                 : update.getCallbackQuery().getMessage().getChatId();
-        ConversationContext ctx = contextMap.computeIfAbsent(chatId, _ -> new ConversationContext());
+        ConversationContext ctx = contextMap.computeIfAbsent(chatId, c -> new ConversationContext());
 
         EventType eventType = update.hasCallbackQuery() ? EventType.CALLBACK : EventType.TEXT;
         MenuState menuState = ctx.getMenuState();
@@ -347,7 +347,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                             log.info("else if (!inSql)");
                             groupUserFromSql = supergroupService.getGroupUserByNickname(nickname);
 
-                            if (!supergroupService.isOrdinaryMember(groupUserFromSql.getTelegramId())) {
+                            if (groupUserFromSql.isAdminOrCreator()) {
                                 message = "Пользователь " + nickname + " не является обычным членом группы. Проверяйте.";
                                 clearMenu(update, ctx.getLastMessageId(), message);
                                 break;

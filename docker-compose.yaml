@@ -8,6 +8,7 @@ services:
       POSTGRES_PASSWORD: 123456
     ports:
       - "5432:5432"
+    restart: unless-stopped
 
   minio:
     image: minio/minio:latest
@@ -51,8 +52,8 @@ services:
       sh -c "mkdir -p /data/tdlib/downloads &&
              exec java $JAVA_OPTS -jar /app/app.jar"
 #    для запуска с интерактивным подключением к TG
-#    stdin_open: true
-#    tty: true
+    stdin_open: true
+    tty: true
 
 volumes:
   tdlib-data: {}

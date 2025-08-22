@@ -1,20 +1,25 @@
 # Runtime-образ (glibc, не Alpine — полезно для native-библиотек)
-FROM eclipse-temurin:24-jre
+FROM eclipse-temurin:21-jre
 
 # Рабочая папка
 WORKDIR /app
 
 # Параметры JVM (опционально)
-ENV JAVA_OPTS="-Xms256m -Xmx512m" \
-    TZ=Europe/Moscow \
+ENV TZ=Europe/Moscow \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    JAVA_TOOL_OPTIONS="-Duser.timezone=Europe/Moscow" \
     SPRING_PROFILES_ACTIVE=prod
 
-# Кладём заранее собранный fatjar (например, target/app.jar)
-COPY target/IlluminatiAdminBot-0.0.1-SNAPSHOT.jar /app/app.jar
+RUN mkdir -p /data/tdlib && \
+    useradd -r -s /bin/false appuser && \
+    chown -R appuser:appuser /app /data/tdlib
 
-# Непривилегированный пользователь
-RUN useradd -r -s /bin/false appuser && chown appuser:appuser /app/app.jar
+VOLUME ["/data/tdlib"]
+
+COPY --chown=appuser:appuser target/IlluminatiAdminBot-0.0.1-SNAPSHOT.jar /app/app.jar
+
 USER appuser
 
 EXPOSE 8080
-ENTRYPOINT ["sh","-c","java $JAVA_OPTS -jar /app/app.jar"]
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]
