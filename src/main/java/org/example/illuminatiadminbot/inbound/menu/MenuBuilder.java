@@ -32,22 +32,29 @@ public class MenuBuilder {
                 .build();
 
         InlineKeyboardButton btn5 = InlineKeyboardButton.builder()
-                .text("Показать БД")
+                .text("БД")
                 .callbackData("SHOW-SQL")
                 .build();
 
         InlineKeyboardButton btn6 = InlineKeyboardButton.builder()
-                .text("Показать супергруппу")
+                .text("Cупергруппа")
                 .callbackData("SHOW-SUPERGROUP")
+                .build();
+
+        InlineKeyboardButton btn7 = InlineKeyboardButton.builder()
+                .text("Снинхронизация")
+                .callbackData("SYNCHRONIZE")
                 .build();
 
 
         InlineKeyboardRow row1 = new InlineKeyboardRow(btn1, btn2, btn3);
         InlineKeyboardRow row2 = new InlineKeyboardRow(btn4, btn5, btn6);
+        InlineKeyboardRow row3 = new InlineKeyboardRow(btn7);
 
         return InlineKeyboardMarkup.builder()
                 .keyboardRow(row1)
                 .keyboardRow(row2)
+                .keyboardRow(row3)
                 .build();
     }
 

@@ -14,6 +14,7 @@ import org.example.illuminatiadminbot.outbound.model.GroupUser;
 import org.example.illuminatiadminbot.outbound.model.MinioFileDetail;
 import org.example.illuminatiadminbot.service.AdminBotService;
 import org.example.illuminatiadminbot.service.SupergroupService;
+import org.example.illuminatiadminbot.service.UserSyncService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.longpolling.interfaces.LongPollingUpdateConsumer;
@@ -58,6 +59,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
     private final MessageBuilder messageBuilder;
     private final AdminBotService adminBotService;
     private final SupergroupService supergroupService;
+    private final UserSyncService userSyncService;
     private final Map<Long, ConversationContext> contextMap = new ConcurrentHashMap<>();
     private final TopicProperties topicProperties;
     private final PhoneValidatorAndNormalizer phoneValidatorAndNormalizer;
@@ -215,6 +217,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                     telegramGateway.safeExecute(editMessageText);
                     ctx.clearContext();
                 } else if ("SHOW-SUPERGROUP".equals(data)) {
+                    ctx.setLastMessageId(update.getCallbackQuery().getMessage().getMessageId());
                     List<GroupUser> groupUsersFromSupergroup = supergroupService.getAllGroupUsers();
                     StringBuilder supergroupUsers = new StringBuilder("В супергруппу входят:\n\n");
                     for (GroupUser groupUserFromSupergroup : groupUsersFromSupergroup) {
@@ -224,6 +227,19 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                             .chatId(chatId)
                             .messageId(ctx.getLastMessageId())
                             .text(supergroupUsers.toString())
+                            .replyMarkup(new InlineKeyboardMarkup(Collections.emptyList()))
+                            .build();
+                    telegramGateway.safeExecute(editMessageText);
+                    ctx.clearContext();
+                } else if ("SYNCHRONIZE".equals(data)) {
+                    ctx.setLastMessageId(update.getCallbackQuery().getMessage().getMessageId());
+
+                    userSyncService.correctSql();
+
+                    EditMessageText editMessageText = EditMessageText.builder()
+                            .chatId(chatId)
+                            .messageId(ctx.getLastMessageId())
+                            .text("Синхронизация проведена")
                             .replyMarkup(new InlineKeyboardMarkup(Collections.emptyList()))
                             .build();
                     telegramGateway.safeExecute(editMessageText);
