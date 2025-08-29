@@ -11,7 +11,7 @@ import java.util.List;
 @Component
 @Data
 public class ConversationContext {
-    private final ArrayList<String> subscriptionDetails = new ArrayList<>(List.of("", "", ""));
+    private final ArrayList<String> subscriptionDetails = new ArrayList<>(List.of("", "", "", ""));
     private UploadDetails uploadDetails = new UploadDetails();
     private MenuState menuState = MenuState.MAIN_MENU;
     private Integer lastMessageId = null;
@@ -21,6 +21,7 @@ public class ConversationContext {
         subscriptionDetails.set(0, "");
         subscriptionDetails.set(1, "");
         subscriptionDetails.set(2, "");
+        subscriptionDetails.set(3, "");
         uploadDetails.clearUploadDetails();
         menuState = MenuState.MAIN_MENU;
         lastMessageId = null;

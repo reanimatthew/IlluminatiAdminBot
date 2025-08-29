@@ -78,7 +78,7 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
 
     @PostConstruct
     public void init() {
-        handlerRegistry.register(new DurationMenuHandler(new MenuBuilder()));
+        handlerRegistry.register(new DurationMenuHandler(new MenuBuilder(), new DataParser()));
         handlerRegistry.register(new SubscriptionMenuHandler(new MenuBuilder()));
         handlerRegistry.register(new NickOrPhoneHandler(new MenuBuilder()));
     }

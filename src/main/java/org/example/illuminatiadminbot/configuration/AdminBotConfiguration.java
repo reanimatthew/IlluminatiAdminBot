@@ -7,6 +7,7 @@ import it.tdlight.Slf4JLogMessageHandler;
 import it.tdlight.client.*;
 import it.tdlight.jni.TdApi;
 import it.tdlight.util.UnsupportedNativeLibraryException;
+import org.example.illuminatiadminbot.inbound.DataParser;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -31,7 +32,7 @@ public class AdminBotConfiguration {
     }
 
     @Bean
-    TelegramClient telegramClient(@Value("${telegram.bot.token}")  String token) {
+    TelegramClient telegramClient(@Value("${telegram.bot.token}") String token) {
         return new OkHttpTelegramClient(token);
     }
 
@@ -83,5 +84,10 @@ public class AdminBotConfiguration {
 
         return client;
     }
+
+//    @Bean
+//    public DataParser dataParser() {
+//        return new DataParser();
+//    }
 
 }
