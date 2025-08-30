@@ -177,7 +177,14 @@ public class AdminBotService {
         String subscriptionType = subscriptionDetails.get(0);
         String numOfMonth = subscriptionDetails.get(1);
         int subscribeDuration = Integer.parseInt(numOfMonth.substring(0, numOfMonth.length() - 1));
-        LocalDate expirationDate = LocalDate.now(ZoneId.of("Europe/Moscow")).plusMonths(subscribeDuration);
+
+        LocalDate expirationDate;
+        if (subscriptionDetails.get(3).isEmpty()) {
+            expirationDate = LocalDate.now(ZoneId.of("Europe/Moscow")).plusMonths(subscribeDuration);
+        } else {
+            expirationDate = LocalDate.parse(subscriptionDetails.get(3));
+        }
+
         groupUser.setSubscriptionType(Subscription.fromString(subscriptionType));
         groupUser.setSubscriptionDuration(subscribeDuration);
         groupUser.setSubscriptionExpiration(expirationDate);

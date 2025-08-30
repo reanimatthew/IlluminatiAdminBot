@@ -45,7 +45,7 @@ public class SubscriptionMenuHandler implements Handler {
 
 
         if (Subscription.contains(data)) {
-            String text = "Подписка: " + data + "\nВыберите срок подписки:";
+            String text = "Подписка: " + data + "\nВыберите срок подписки или введите его в формате ДД.ММ.ГГГГ:";
 
             OutboundAction outboundAction = OutboundAction.editMessage(
                     text,

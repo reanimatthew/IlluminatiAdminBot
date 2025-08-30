@@ -22,17 +22,23 @@ public class DurationMenuHandler implements Handler {
 
     @Override
     public boolean supports(MenuState menuState, EventType eventType) {
-        return menuState == MenuState.DURATION_MENU && eventType == EventType.CALLBACK;
+        return menuState == MenuState.DURATION_MENU && (eventType == EventType.CALLBACK || eventType == EventType.TEXT);
     }
 
     @Override
     public HandlerResult handle(Update update, ConversationContext conversationContext) {
-        String data = update.getCallbackQuery().getData();
+        String data = update.hasCallbackQuery()
+                ? update.getCallbackQuery().getData()
+                : null;
+
+        String text = update.hasMessage() && update.getMessage().hasText()
+                ? update.getMessage().getText()
+                : null;
 
         if ("BACK-TO-SUBSCRIPTION".equals(data)) {
-            String text = "Выберите подписку";
+            String message = "Выберите подписку";
             OutboundAction outboundAction = OutboundAction.editMessage(
-                    text,
+                    message,
                     menuBuilder.getSubscription(update)
             );
 
@@ -42,6 +48,7 @@ public class DurationMenuHandler implements Handler {
                     .contextUpdater(ctx -> {
                         ctx.getSubscriptionDetails().set(1, "");
                         ctx.getSubscriptionDetails().set(2, "");
+                        ctx.getSubscriptionDetails().set(3, "");
                     })
                     .build();
         }
@@ -49,51 +56,73 @@ public class DurationMenuHandler implements Handler {
         Set<String> duration = Set.of("1M", "3M", "6M", "12M");
         LocalDate now = LocalDate.now();
 
-        Optional<LocalDate> parsed =  dataParser.parse(data);
-        boolean isDuration = duration.contains(data);
+
+        Optional<LocalDate> parsed = dataParser.parse(text);
+        boolean isDuration = (data != null && duration.contains(data));
         boolean isDate = parsed.isPresent();
 
-        String month;
-        LocalDate date = null;
-        String text;
-        if (duration.contains(data) || dataParser.isDate(data)) {
-            if (duration.contains(data)) {
-                month = data;
-            } else {
-                date = dataParser.parse(data).orElse(LocalDate.now());
-                month = ChronoUnit.MONTHS.between(date, LocalDate.now()) + "M";
-            }
-
-            text = "Подписка: " + conversationContext.getSubscriptionDetails().get(0) +
-                    ", на срок: " + month + "." +
-                    "\nВведите никнейм или телефон:";
-
-            OutboundAction outboundAction = OutboundAction.editMessage(
-                    text,
-                    menuBuilder.getNickOrPhone(update)
-            );
-
-            String dateToString = date != null
-                    ? date.toString()
-                    : null;
-
+        if (!isDuration && !isDate) {
             return HandlerResult.builder()
-                    .actions(List.of(outboundAction))
-                    .nextMenuState(MenuState.NICK_OR_PHONE_MENU)
-                    .contextUpdater(ctx -> {
-                        ctx.getSubscriptionDetails().set(1, month);
-                        ctx.getSubscriptionDetails().set(4, dateToString);
+                    .actions(List.of())
+                    .nextMenuState(MenuState.DURATION_MENU)
+                    .contextUpdater(context -> {
                     })
-                    .nextMenuState(MenuState.NICK_OR_PHONE_MENU)
                     .build();
         }
 
-        // если что-то другое прислали - не реагируем
+        String monthString;
+        LocalDate existedDate = null;
+
+        if (isDuration) {
+            monthString = data;
+        } else {
+            existedDate = parsed.get();
+
+            if (existedDate.isBefore(now)) {
+
+                OutboundAction errorAction = OutboundAction.editMessage(
+                        "Введена дата раньше сегодняшнего дня, введите заново",
+                        menuBuilder.getDuration(update)
+                );
+
+                return HandlerResult.builder()
+                        .actions(List.of(errorAction))
+                        .nextMenuState(MenuState.DURATION_MENU)
+                        .contextUpdater(ctx -> {
+                            ctx.getSubscriptionDetails().set(1, "");
+                            ctx.getSubscriptionDetails().set(2, "");
+                            ctx.getSubscriptionDetails().set(3, "");
+                        })
+                        .build();
+            }
+
+            long months = ChronoUnit.MONTHS.between(
+                    now.withDayOfMonth(1),
+                    existedDate.withDayOfMonth(1));
+            monthString = months + "M";
+
+        }
+
+        String message = "Подписка: " + conversationContext.getSubscriptionDetails().get(0) +
+                ", на срок: " + monthString + "." +
+                "\nВведите никнейм или телефон:";
+
+        OutboundAction outboundAction = OutboundAction.editMessage(
+                message,
+                menuBuilder.getNickOrPhone(update)
+        );
+
+        String dateToString = existedDate != null
+                ? existedDate.toString()
+                : "";
+
         return HandlerResult.builder()
-                .actions(List.of())
-                .nextMenuState(MenuState.DURATION_MENU)
-                .contextUpdater(context -> {
+                .actions(List.of(outboundAction))
+                .contextUpdater(ctx -> {
+                    ctx.getSubscriptionDetails().set(1, monthString);
+                    ctx.getSubscriptionDetails().set(3, dateToString);
                 })
+                .nextMenuState(MenuState.NICK_OR_PHONE_MENU)
                 .build();
     }
 }
