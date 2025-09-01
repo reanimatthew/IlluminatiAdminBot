@@ -548,6 +548,11 @@ public class AdminTelegramBot implements SpringLongPollingBot, LongPollingSingle
                         GroupUser groupAdmin = supergroupService.addMemberToSupergroup(phone);
                         if (groupAdmin != null) {
                             promoteToAdmin(groupAdmin.getTelegramId());
+
+                            if (adminBotService.getUser(groupAdmin.getTelegramId()) != null) {
+                                groupAdmin = adminBotService.getUser(groupAdmin.getTelegramId());
+                            }
+
                             groupAdmin.setSubscriptionType(Subscription.ADMIN);
                             groupAdmin.setSubscriptionDuration(5 * 12);
                             groupAdmin.setSubscriptionExpiration(LocalDate.now(ZoneId.of("Europe/Moscow")).plusYears(5));

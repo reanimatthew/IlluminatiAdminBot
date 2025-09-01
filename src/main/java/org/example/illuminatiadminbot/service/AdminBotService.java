@@ -196,6 +196,11 @@ public class AdminBotService {
         return groupUserOptional.orElse(null);
     }
 
+    public GroupUser getUser(long telegramId) {
+        Optional<GroupUser> groupUserOptional = groupUserRepository.findByTelegramId(telegramId);
+        return groupUserOptional.orElse(null);
+    }
+
     public List<GroupUser> getUsersWithExpiringSubscriptions() {
         return groupUserRepository.findAllByTelegramUserStatusInAndSubscriptionExpirationBetween(TelegramUserStatus.getActiveStatuses(), LocalDate.now(ZoneId.of("Europe/Moscow")), LocalDate.now(ZoneId.of("Europe/Moscow")).plusWeeks(1L)).get();
     }
